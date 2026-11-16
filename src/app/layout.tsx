@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Nunito_Sans, Playfair, Playfair_Display, Work_Sans } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 import { StoreProvider } from "@/context/StoreContext";
 import Header from "@/components/Header";
@@ -11,10 +11,23 @@ import { api } from "@/lib/api-server";
 import ShopChrome from "@/components/ShopChrome";
 
 // Same type system as the reference: Nunito Sans (UI), Work Sans (eyebrows/labels), Playfair (headings).
-const nunito = Nunito_Sans({ variable: "--font-nunito", subsets: ["latin"], weight: ["400", "500", "600", "700", "800"] });
-const work = Work_Sans({ variable: "--font-work-sans", subsets: ["latin"], weight: ["400", "500", "600", "700"] });
-const playfair = Playfair({ variable: "--font-playfair", subsets: ["latin"], weight: ["400", "500", "600"], style: ["normal", "italic"] });
-const playfairDisplay = Playfair_Display({ variable: "--font-playfair-display", subsets: ["latin"], weight: ["500", "600"], style: ["normal", "italic"] });
+// Self-hosted latin variable fonts (from Google Fonts) in ./fonts, so builds never depend on fetching Google Fonts.
+const nunito = localFont({ variable: "--font-nunito", src: "./fonts/nunito-sans.woff2", weight: "400 800", style: "normal" });
+const work = localFont({ variable: "--font-work-sans", src: "./fonts/work-sans.woff2", weight: "400 700", style: "normal" });
+const playfair = localFont({
+  variable: "--font-playfair",
+  src: [
+    { path: "./fonts/playfair.woff2", weight: "400 600", style: "normal" },
+    { path: "./fonts/playfair-italic.woff2", weight: "400 600", style: "italic" },
+  ],
+});
+const playfairDisplay = localFont({
+  variable: "--font-playfair-display",
+  src: [
+    { path: "./fonts/playfair-display.woff2", weight: "500 600", style: "normal" },
+    { path: "./fonts/playfair-display-italic.woff2", weight: "500 600", style: "italic" },
+  ],
+});
 
 export const metadata: Metadata = {
   title: { default: "Oreo Nails — Hand-Painted Press-On Nails", template: "%s | Oreo Nails" },
