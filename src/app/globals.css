@@ -1,0 +1,68 @@
+@import "tailwindcss";
+
+/* Design tokens measured from the reference storefront (desktop 1440px). */
+@theme {
+  --color-plum: #4b384c;          /* primary: text, buttons, footer */
+  --color-plum-light: #684e69;
+  --color-plum-soft: #c98aa3;
+  --color-blush: #ecd3dd;         /* promo bar label */
+  --color-pink: #f6dbe5;          /* drawer highlight, newsletter card */
+  --color-pink-soft: #f9eef2;     /* icon circles */
+  --color-card: #f8f4f6;          /* product image background */
+  --color-cream: #fdfbf8;         /* footer text */
+  --color-muted: #6e5e6c;
+  --color-line: #e7e0e5;
+  --color-sale: #e0283e;          /* "NEW" ribbon */
+  /* legacy aliases used by secondary pages */
+  --color-ink: #4b384c;
+  --color-sand: #f8f4f6;
+  --color-rose: #b04a6c;
+  --color-rose-soft: #f6dbe5;
+
+  --font-sans: var(--font-nunito), ui-sans-serif, system-ui, sans-serif;
+  --font-work: var(--font-work-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-playfair), ui-serif, Georgia, serif;
+  --font-playfair-display: var(--font-playfair-display), Georgia, serif;
+  --font-times: "Times New Roman", Georgia, ui-serif, serif;
+}
+
+html { scroll-behavior: smooth; }
+body {
+  background: #ffffff;
+  color: var(--color-plum);
+}
+
+/* 60px gutters on desktop like the reference, 12px on phones. */
+@utility container-x { @apply mx-auto w-full max-w-[1440px] px-3 md:px-8 lg:px-[60px]; }
+
+@utility btn {
+  @apply inline-flex h-[46px] items-center justify-center gap-2 rounded-full border px-[18px] text-[14.4px] font-semibold uppercase tracking-[1.08px] whitespace-nowrap transition disabled:cursor-not-allowed disabled:opacity-50;
+}
+@utility btn-dark { @apply btn border-plum bg-plum text-white hover:bg-plum-light; }
+@utility btn-plum { @apply btn border-white bg-plum text-white hover:bg-plum-light; }
+@utility btn-light { @apply btn border-black bg-white text-black hover:bg-white/85; }
+@utility btn-white { @apply btn border-white bg-white text-black hover:bg-white/85; }
+@utility btn-outline { @apply btn border-plum bg-transparent text-plum hover:bg-plum/10; }
+
+@utility input { @apply w-full rounded-lg border border-line bg-white px-4 py-3 text-sm text-plum outline-none placeholder:text-muted/70 focus:border-plum; }
+@utility label { @apply mb-1 block font-work text-[11px] font-medium uppercase tracking-[1.1px] text-muted; }
+@utility h-display { @apply font-display font-medium; }
+@utility h-section { @apply font-times text-[28px] leading-[1.15] font-medium text-plum md:text-[36px]; }
+@utility eyebrow { @apply font-work text-[11.2px] uppercase tracking-[1.12px]; }
+@utility prose-x {
+  & p { @apply mb-4 leading-relaxed text-plum/85; }
+  & h2 { @apply font-display mt-8 mb-3 text-2xl font-medium; }
+  & ul { @apply mb-4 list-disc space-y-1 pl-6 text-plum/85; }
+  & ol { @apply mb-4 list-decimal space-y-1 pl-6 text-plum/85; }
+}
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar { display: none; }
+}
+
+@keyframes marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+.animate-marquee { animation: marquee 40s linear infinite; }
+.animate-marquee-slow { animation: marquee 60s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .animate-marquee, .animate-marquee-slow { animation: none; } }
+@keyframes fadein { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.animate-fadein { animation: fadein .35s ease both; }
