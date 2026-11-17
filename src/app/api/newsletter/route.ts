@@ -11,8 +11,12 @@ export async function POST(req: Request) {
   if (!email || email.length > 200 || !EMAIL_RE.test(email)) return fail(400, "Please enter a valid email");
 
   try {
-    const found = await admin<{ customers: { nodes: { id: string }[] } }>(`query($q: String!) { customers(first: 1, query: $q) { nodes { id } } }`, { q: `email:${JSON.stringify(email)}` });
-    const existing = found.customers.nodes[0];
+    // Direct lookup, not the search index — a customer created seconds ago isn't searchable yet.
+    const found = await admin<{ customerByIdentifier: { id: string } | null }>(
+      `query($email: String!) { customerByIdentifier(identifier: { emailAddress: $email }) { id } }`,
+      { email },
+    );
+    const existing = found.customerByIdentifier;
     if (existing) {
       const d = await admin<{ customerEmailMarketingConsentUpdate: { userErrors: { message: string }[] } }>(
         `mutation($input: CustomerEmailMarketingConsentUpdateInput!) { customerEmailMarketingConsentUpdate(input: $input) { userErrors { message } } }`,

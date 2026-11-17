@@ -582,7 +582,7 @@ export const cartApi = {
   },
   async setCodes(cartId: string, discountCodes: string[]) {
     const d = await storefront<{ cartDiscountCodesUpdate: CartResult }>(
-      `mutation($cartId: ID!, $codes: [String!]) { cartDiscountCodesUpdate(cartId: $cartId, discountCodes: $codes) { cart { ${CART_FIELDS} } userErrors { message } } }`,
+      `mutation($cartId: ID!, $codes: [String!]!) { cartDiscountCodesUpdate(cartId: $cartId, discountCodes: $codes) { cart { ${CART_FIELDS} } userErrors { message } } }`,
       { cartId, codes: discountCodes },
       { fresh: true },
     );
