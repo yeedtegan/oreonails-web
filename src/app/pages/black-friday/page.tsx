@@ -1,10 +1,14 @@
 import type { Metadata } from "next";
 import { NewsletterForm } from "@/components/Newsletter";
 import NailArt from "@/components/NailArt";
+import { sceneImage } from "@/components/Art";
+import { api } from "@/lib/api-server";
 
 export const metadata: Metadata = { title: "Black Friday Early Access" };
 
-export default function BlackFridayPage() {
+export default async function BlackFridayPage() {
+  const sale = await api.products({ onSale: true, limit: 8 }).catch(() => []);
+  const image = sceneImage(sale.length ? sale : await api.products({ limit: 8 }).catch(() => []));
   return (
     <section className="bg-ink text-cream">
       <div className="container-x grid items-center gap-10 py-20 lg:grid-cols-2">
@@ -16,7 +20,12 @@ export default function BlackFridayPage() {
             <NewsletterForm dark cta="Join the list" />
           </div>
         </div>
-        <NailArt palette={["#111111", "#1c1c1c", "#d4af37", "#ffffff"]} pattern="stars" shape="Coffin" className="aspect-square w-full rounded-3xl" />
+        {image ? (
+          // eslint-disable-next-line @next/next/no-img-element -- product photo from the Shopify CDN
+          <img src={image} alt="" className="aspect-square w-full rounded-3xl object-cover" />
+        ) : (
+          <NailArt palette={["#111111", "#1c1c1c", "#d4af37", "#ffffff"]} pattern="stars" shape="Coffin" className="aspect-square w-full rounded-3xl" />
+        )}
       </div>
     </section>
   );

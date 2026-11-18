@@ -4,6 +4,7 @@ import { api } from "@/lib/api-server";
 import CollectionView from "@/components/CollectionView";
 import NailArt from "@/components/NailArt";
 import Photo from "@/components/Photo";
+import { sceneImage } from "@/components/Art";
 import { ArticleCards, FeatureIcons } from "@/components/sections";
 
 export async function generateMetadata({ params }: { params: Promise<{ handle: string }> }): Promise<Metadata> {
@@ -28,6 +29,7 @@ export default async function CollectionPage({ params }: { params: Promise<{ han
         ) : (
         <Photo
           name={`collection-${handle}`}
+          src={sceneImage(products)}
           priority
           fallback={
             <>

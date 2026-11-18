@@ -56,6 +56,8 @@ export interface Collection {
   palette: [string, string, string, string];
   pattern: Pattern;
   image?: string | null;
+  /** Shopify backend: a photo from the collection's products, used where `image` isn't set. */
+  cover?: string | null;
 }
 
 export const SITE = {

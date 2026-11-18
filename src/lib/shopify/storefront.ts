@@ -5,6 +5,7 @@
 import { BLOG_HANDLE, NS, STOREFRONT_URL, SHOPIFY_STOREFRONT_TOKEN } from "./config";
 import { PROMO_TIERS, SHAPES, SITE, SIZES, type Article, type Collection, type Faq, type Pattern, type Product, type ProductType, type Review, type ReviewSummary, type SiteSettings } from "../data";
 import { freeSetsFor, type CartLine, type Quote } from "../pricing";
+import { pickScene } from "../scene";
 
 export class ShopifyError extends Error {}
 
@@ -151,6 +152,8 @@ interface ShopifyCollection {
   description: string;
   image: { url: string } | null;
   metafields: Metafield[];
+  /** Only in the collection list: a few products' photos for the cover. */
+  products?: { nodes: { images: { nodes: { url: string }[] } }[] };
 }
 
 const GROUPS = ["shop", "collection", "season", "other"] as const;
@@ -332,11 +335,15 @@ function withoutPosition(c: Collection & { position?: number }): Collection {
 }
 
 export async function getCollections(): Promise<Collection[]> {
-  const data = await storefront<{ collections: { nodes: ShopifyCollection[] } }>(`{ collections(first: 100) { nodes { ${COLLECTION_FIELDS} } } }`);
+  const data = await storefront<{ collections: { nodes: ShopifyCollection[] } }>(
+    `{ collections(first: 100) { nodes { ${COLLECTION_FIELDS} products(first: 4) { nodes { images(first: 6) { nodes { url } } } } } } }`,
+  );
+  // Collections without their own image get a photo from their products, a different one each where possible.
+  const used = new Set<string>();
   return data.collections.nodes
-    .map(toCollection)
-    .sort((a, b) => a.position - b.position || a.title.localeCompare(b.title))
-    .map(withoutPosition);
+    .map((c) => ({ c, out: toCollection(c) }))
+    .sort((a, b) => a.out.position - b.out.position || a.out.title.localeCompare(b.out.title))
+    .map(({ c, out }) => ({ ...withoutPosition(out), cover: out.image ? null : pickScene((c.products?.nodes ?? []).map((p) => p.images.nodes.map((i) => i.url)), used) }));
 }
 
 export async function getCollection(handle: string, q: Omit<ProductQuery, "collection" | "handles"> = {}) {

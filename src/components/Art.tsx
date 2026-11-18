@@ -1,8 +1,14 @@
 /* eslint-disable @next/next/no-img-element -- admin uploads are served by the API via /uploads, not optimised by next/image */
 import type { Article, Collection, Product } from "@/lib/data";
+import { pickScene } from "@/lib/scene";
 import NailArt from "./NailArt";
 
 type Variant = "hand" | "set" | "bundle" | "tool";
+
+/** A worn-set photo from these products, for banners and tiles (see pickScene). */
+export function sceneImage(products: (Product | undefined)[], used?: Set<string>): string | null {
+  return pickScene(products.map((p) => p?.images), used);
+}
 const variantOf = (p: Product): Variant => (p.type === "bundle" ? "bundle" : p.type === "tool" ? "tool" : "set");
 
 /** Product image: the uploaded photo at `index` when there is one, otherwise the generated nail-art illustration. */
@@ -27,7 +33,8 @@ export function ProductArt({
 }
 
 export function CollectionArt({ collection: c, className = "" }: { collection: Collection; className?: string }) {
-  if (c.image) return <img src={c.image} alt={c.title} loading="lazy" className={`object-cover ${className}`} />;
+  const src = c.image ?? c.cover;
+  if (src) return <img src={src} alt={c.title} loading="lazy" className={`object-cover ${className}`} />;
   return <NailArt palette={c.palette} pattern={c.pattern} className={className} />;
 }
 

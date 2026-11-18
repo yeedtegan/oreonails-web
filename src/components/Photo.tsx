@@ -19,6 +19,7 @@ export function findImage(name: string) {
  */
 export default function Photo({
   name,
+  src: remote,
   alt = "",
   fallback,
   className = "",
@@ -27,6 +28,8 @@ export default function Photo({
   position,
 }: {
   name: string;
+  /** Remote image (e.g. a product photo from Shopify) used when there's no local file. */
+  src?: string | null;
   alt?: string;
   fallback: React.ReactNode;
   className?: string;
@@ -34,7 +37,7 @@ export default function Photo({
   sizes?: string;
   position?: string;
 }) {
-  const src = findImage(name);
+  const src = findImage(name) ?? remote;
   if (!src) return <>{fallback}</>;
   return <Image src={src} alt={alt} fill priority={priority} sizes={sizes} className={`object-cover ${className}`} style={position ? { objectPosition: position } : undefined} />;
 }

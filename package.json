@@ -8,8 +8,10 @@
     "start": "next start",
     "lint": "eslint",
     "shopify:migrate": "node --env-file-if-exists=.env.local scripts/shopify-migrate.mjs",
-    "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
-    "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy"
+    "shopify:handora-images": "node --env-file-if-exists=.env.local scripts/handora-images.mjs",
+    "build:cf": "NEXT_PUBLIC_DATA_SOURCE=shopify opennextjs-cloudflare build",
+    "preview": "npm run build:cf && opennextjs-cloudflare preview",
+    "deploy": "npm run build:cf && opennextjs-cloudflare deploy"
   },
   "dependencies": {
     "@opennextjs/cloudflare": "^1.20.17",
@@ -27,6 +29,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "^15.5.29",
+    "playwright": "^1.65.1",
     "tailwindcss": "^4",
     "typescript": "^5",
     "wrangler": "^4.162.0"

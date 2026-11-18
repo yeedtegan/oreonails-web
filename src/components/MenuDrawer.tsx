@@ -3,10 +3,9 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { Collection } from "@/lib/data";
-import NailArt from "./NailArt";
 import { ChevronLeft, ChevronRight, CloseIcon, GiftIcon, RulerIcon, StarIcon, TagIcon, UserSolid } from "./Icons";
 import { NewsletterInline } from "./Newsletter";
-import { CollectionArt } from "@/components/Art";
+import { CollectionArt } from "./Art";
 
 /** Left slide-out menu (420px), laid out like the reference drawer. */
 export default function MenuDrawer({ open, onClose, collections }: { open: boolean; onClose: () => void; collections: Collection[] }) {
@@ -66,7 +65,7 @@ export default function MenuDrawer({ open, onClose, collections }: { open: boole
               {shopTiles.map((t) => {
                 const inner = (
                   <>
-                    {t.c && <NailArt palette={t.c.palette} pattern={t.c.pattern} className="h-11 w-11 shrink-0 rounded-lg" />}
+                    {t.c && <CollectionArt collection={t.c} className="h-11 w-11 shrink-0 rounded-lg" />}
                     <span className="flex-1 text-left text-[15px] font-bold">{t.label}</span>
                     {t.sub && <ChevronRight width={16} height={16} />}
                   </>

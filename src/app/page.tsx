@@ -8,11 +8,13 @@ import ReviewCarousel from "@/components/ReviewCarousel";
 import { FaqColumns, CollectionHeader, MobileCta } from "@/components/ui";
 import { BrushIcon, ClockIcon, RepeatIcon, Stars, UsersIcon } from "@/components/Icons";
 import { ArticleCards, FeatureIcons } from "@/components/sections";
-import { CollectionArt } from "@/components/Art";
+import { CollectionArt, sceneImage } from "@/components/Art";
 
 // Section order, spacing and type scale follow the reference homepage at 1440px.
-// Photos are optional: put files in public/images/ (names noted per section) to replace the illustrations.
+// Banner and tile photos come from the current products (a worn-set photo of a product in that
+// collection); a file in public/images/ (names noted per section) overrides them.
 
+/** Preferred trending tiles; ones with no products are dropped and the row is topped up from other collections. */
 const TRENDING = [
   { handle: "best-sellers", label: "Best Sellers" },
   { handle: "new-arrivals", label: "Just Dropped" },
@@ -21,50 +23,85 @@ const TRENDING = [
   { handle: "cozy-fall", label: "Cozy Fall" },
   { handle: "star-signs", label: "Mystic Zodiac" },
 ];
+const NOT_A_TILE = new Set(["shop-all", "frontpage", "all-sets"]);
+
+type Tile = { handle: string; label: string; isNew?: boolean; c?: Collection; image: string | null };
 
 export default async function Home() {
-  const [collections, holiday, bestSellers, bundles, tools, articles, reviewData, faqs] = await Promise.all([
+  const [collections, holiday, bestSellers, newArrivals, catalogue, bundles, tools, articles, reviewData, faqs] = await Promise.all([
     api.collections(),
     api.products({ collection: "holiday-glam", type: "set", limit: 8 }),
     api.products({ collection: "best-sellers", limit: 8 }),
+    api.products({ collection: "new-arrivals", limit: 8 }),
+    api.products({ limit: 24 }),
     api.products({ collection: "bundles", limit: 8 }),
     api.products({ collection: "tools-accessories", limit: 4 }),
     api.articles(3),
     api.reviews({ limit: 12 }),
     api.faqs(),
   ]);
-  const reviewProducts = await api.products({ handles: reviewData.reviews.map((r) => r.product).filter((h): h is string => !!h) });
-  const col = (h: string) => collections.find((c) => c.handle === h);
+  const [reviewProducts, tileProducts] = await Promise.all([
+    api.products({ handles: reviewData.reviews.map((r) => r.product).filter((h): h is string => !!h) }),
+    Promise.all(collections.filter((c) => !NOT_A_TILE.has(c.handle)).map(async (c) => [c.handle, await api.products({ collection: c.handle, limit: 6 })] as const)),
+  ]);
+
+  // Every banner and tile gets its own photo.
+  const used = new Set<string>();
+  const heroImage = sceneImage(newArrivals.length ? newArrivals : catalogue, used);
+
+  // Trending: preferred tiles that have products, then other non-empty collections, 6 in all.
+  const stocked = new Map(tileProducts.filter(([, ps]) => ps.length > 0));
+  const tile = (handle: string, label?: string, isNew?: boolean): Tile => {
+    const c = collections.find((x) => x.handle === handle);
+    return { handle, label: label ?? c?.title ?? handle, isNew, c, image: c?.image ?? sceneImage(stocked.get(handle) ?? [], used) };
+  };
+  const tiles = TRENDING.filter((t) => stocked.has(t.handle)).map((t) => tile(t.handle, t.label, t.isNew));
+  for (const handle of stocked.keys()) if (tiles.length < 6 && !tiles.some((t) => t.handle === handle)) tiles.push(tile(handle));
+
+  const bannerImage = sceneImage([...holiday, ...catalogue].reverse(), used);
+
+  // Best Sellers falls back to sets not already shown above until the collection is filled in.
+  const shown = new Set(holiday.map((p) => p.handle));
+  const featured = bestSellers.length
+    ? { handle: "best-sellers", title: "Best Sellers", subtitle: "The sets our customers keep coming back for.", products: bestSellers }
+    : { handle: "shop-all", title: "More To Love", subtitle: "Fresh designs straight from the studio.", products: catalogue.filter((p) => !shown.has(p.handle)).slice(0, 8) };
 
   return (
     <>
-      <Hero />
-      <Trending tiles={TRENDING.map((t) => ({ ...t, c: col(t.handle) }))} />
+      <Hero image={heroImage} />
+      {tiles.length > 0 && <Trending tiles={tiles} />}
 
-      <section className="container-x pt-10 pb-10 md:pt-[55px]">
-        <CollectionHeader title="Holiday Glam Is Here" subtitle="New festive sets. Shop early." href="/collections/holiday-glam" />
-        <ProductGrid products={holiday} />
-        <MobileCta href="/collections/holiday-glam" />
-      </section>
+      {holiday.length > 0 && (
+        <section className="container-x pt-10 pb-10 md:pt-[55px]">
+          <CollectionHeader title="Holiday Glam Is Here" subtitle="New festive sets. Shop early." href="/collections/holiday-glam" />
+          <ProductGrid products={holiday} />
+          <MobileCta href="/collections/holiday-glam" />
+        </section>
+      )}
 
-      <WideBanner />
+      <WideBanner image={bannerImage} />
 
-      <section className="container-x pt-12 pb-10 md:pt-[65px]">
-        <CollectionHeader title="Best Sellers" subtitle="The sets our customers keep coming back for." href="/collections/best-sellers" />
-        <ProductGrid products={bestSellers} />
-        <MobileCta href="/collections/best-sellers" />
-      </section>
+      {featured.products.length > 0 && (
+        <section className="container-x pt-12 pb-10 md:pt-[65px]">
+          <CollectionHeader title={featured.title} subtitle={featured.subtitle} href={`/collections/${featured.handle}`} />
+          <ProductGrid products={featured.products} />
+          <MobileCta href={`/collections/${featured.handle}`} />
+        </section>
+      )}
 
-      <section className="container-x pt-10 pb-6 md:pt-[35px]">
-        <CollectionHeader title="Bundle For You" subtitle="The ultimate choice, abundant offers" href="/collections/bundles" />
-        <ProductGrid products={bundles} />
-        <MobileCta href="/collections/bundles" />
-      </section>
+      {bundles.length > 0 && (
+        <section className="container-x pt-10 pb-6 md:pt-[35px]">
+          <CollectionHeader title="Bundle For You" subtitle="The ultimate choice, abundant offers" href="/collections/bundles" />
+          <ProductGrid products={bundles} />
+          <MobileCta href="/collections/bundles" />
+        </section>
+      )}
 
-      <ToolsBlock tools={tools} />
+      {tools.length > 0 && <ToolsBlock tools={tools} />}
 
       <ArticleCards articles={articles} title="Latest from the Nail Guide" cta />
 
+      {reviewData.reviews.length > 0 && (
       <section className="pt-5 pb-6">
         <div className="container-x text-center">
           <h2 className="font-display text-[34px] font-medium text-[#0b0b0b] md:text-[42px]">Customers are saying</h2>
@@ -82,6 +119,7 @@ export default async function Home() {
           <ReviewCarousel reviews={reviewData.reviews} products={reviewProducts} />
         </div>
       </section>
+      )}
 
       <AsSeenIn />
 
@@ -108,12 +146,13 @@ const TRUST = [
   { icon: <RepeatIcon width={20} height={20} />, text: "Wears 2–4 Weeks, Reusable 5–10 Times" },
 ];
 
-function Hero() {
+function Hero({ image }: { image: string | null }) {
   return (
     <section className="relative flex h-[422px] flex-col overflow-hidden text-white md:h-[550px]">
       {/* public/images/hero.jpg */}
       <Photo
         name="hero"
+        src={image}
         priority
         position="center 35%"
         fallback={
@@ -160,18 +199,20 @@ function TrustMarquee() {
   );
 }
 
-function Trending({ tiles }: { tiles: { handle: string; label: string; isNew?: boolean; c?: Collection }[] }) {
+function Trending({ tiles }: { tiles: Tile[] }) {
   return (
     <section className="pt-8 pb-2.5 md:pt-[55px]">
       <h2 className="text-center font-times text-[34px] leading-[1.15] font-medium md:text-[36px]">Oreo&apos;s Trending</h2>
       <div className="container-x mt-[7px]">
         <div className="no-scrollbar -mx-3 flex gap-2.5 overflow-x-auto px-3 md:mx-0 md:grid md:grid-cols-3 md:gap-x-2.5 md:gap-y-4 md:overflow-visible md:px-0 lg:grid-cols-6 lg:gap-4">
-          {tiles.map(({ handle, label, isNew, c }) => (
+          {tiles.map(({ handle, label, isNew, c, image }) => (
             <Link key={handle} href={`/collections/${handle}`} className="group w-[104px] shrink-0 text-center md:w-auto">
               <div className="relative aspect-square overflow-hidden rounded-xl">
                 <Photo
                   name={`tile-${handle}`}
+                  src={image}
                   sizes="210px"
+                  className="transition duration-500 group-hover:scale-105"
                   fallback={c ? <CollectionArt collection={c} className="h-full w-full transition duration-500 group-hover:scale-105" /> : <div className="h-full w-full bg-card" />}
                 />
                 {isNew && (
@@ -189,13 +230,14 @@ function Trending({ tiles }: { tiles: { handle: string; label: string; isNew?: b
   );
 }
 
-function WideBanner() {
+function WideBanner({ image }: { image: string | null }) {
   return (
     <section className="container-x">
       <div className="relative flex h-[283px] items-center overflow-hidden rounded-2xl text-white md:h-[312px]">
         {/* public/images/banner-nail-haul.jpg */}
         <Photo
           name="banner-nail-haul"
+          src={image}
           sizes="1320px"
           fallback={
             <>
@@ -225,6 +267,7 @@ function ToolsBlock({ tools }: { tools: Product[] }) {
         {/* public/images/banner-tools.jpg */}
         <Photo
           name="banner-tools"
+          src={sceneImage(tools)}
           sizes="640px"
           fallback={
             <>

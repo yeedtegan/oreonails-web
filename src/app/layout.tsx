@@ -9,6 +9,7 @@ import SearchOverlay from "@/components/SearchOverlay";
 import { NewsletterPopup } from "@/components/Newsletter";
 import { api } from "@/lib/api-server";
 import ShopChrome from "@/components/ShopChrome";
+import { sceneImage } from "@/components/Art";
 
 // Same type system as the reference: Nunito Sans (UI), Work Sans (eyebrows/labels), Playfair (headings).
 // Self-hosted latin variable fonts (from Google Fonts) in ./fonts, so builds never depend on fetching Google Fonts.
@@ -52,7 +53,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
             <Footer />
             <CartDrawer recommendations={recommendations} collections={collections} />
             <SearchOverlay />
-            <NewsletterPopup />
+            <NewsletterPopup image={sceneImage([...recommendations].reverse())} />
           </ShopChrome>
         </StoreProvider>
       </body>

@@ -117,7 +117,7 @@ export function NewsletterFooter() {
 }
 
 /** First-visit popup: split card (image left, dark offer panel right) like the reference. */
-export function NewsletterPopup() {
+export function NewsletterPopup({ image }: { image?: string | null }) {
   const { subscribed, hydrated } = useStore();
   const [open, setOpen] = useState(false);
   const s = useSubscribe();
@@ -151,7 +151,12 @@ export function NewsletterPopup() {
     <div className="fixed inset-0 z-[70] grid place-items-center p-4">
       <div className="absolute inset-0 bg-black/55" onClick={close} />
       <div className="animate-fadein relative grid w-full max-w-[760px] overflow-hidden rounded-xl shadow-2xl md:grid-cols-2">
-        <NailArt palette={["#efe6e1", "#f1d6cf", "#a9c4e6", "#ffffff"]} pattern="french" shape="Almond" className="hidden h-full w-full md:block" />
+        {image ? (
+          // eslint-disable-next-line @next/next/no-img-element -- product photo from the Shopify CDN
+          <img src={image} alt="" className="hidden h-full min-h-[440px] w-full object-cover md:block" />
+        ) : (
+          <NailArt palette={["#efe6e1", "#f1d6cf", "#a9c4e6", "#ffffff"]} pattern="french" shape="Almond" className="hidden h-full w-full md:block" />
+        )}
         <div className="relative bg-[radial-gradient(ellipse_at_top_right,#4a1324_0%,#170a0e_55%,#0b0b0b_100%)] px-7 pb-5 pt-8 text-white">
           <button onClick={close} aria-label="Close" className="absolute right-4 top-3.5 grid h-8 w-8 place-items-center rounded-full border-2 border-white bg-black/30">
             <CloseIcon width={16} height={16} strokeWidth={2.2} />
