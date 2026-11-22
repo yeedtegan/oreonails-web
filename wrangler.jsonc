@@ -1,0 +1,31 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // Next.js app on Cloudflare Workers via OpenNext (npm run deploy). oreonails-api runs on the VPS (pm2).
+  "name": "oreonails-web",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-11-01",
+  "compatibility_flags": [
+    "nodejs_compat",
+    "global_fetch_strictly_public"
+  ],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "services": [
+    // used by OpenNext for internal requests (must match "name")
+    {
+      "binding": "WORKER_SELF_REFERENCE",
+      "service": "oreonails-web"
+    }
+  ],
+  "observability": {
+    "enabled": true
+  },
+  // plain runtime settings; secrets (IMAGE_API_TOKEN) are set with `npx wrangler secret put`
+  "vars": {
+    "IMAGE_API_URL": "https://api.oreonails.com",
+    "IMAGE_API_TOKEN": "xokYPRBrs6lbL71haZM-nBIfW1g4IvhYG8o7PFSVVjixfT1MrOWL5pQGZDNv5258",
+    "SITE_URL": "https://oreonails.com"
+  }
+}

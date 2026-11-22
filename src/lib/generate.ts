@@ -60,8 +60,10 @@ export async function waitForDesign(jobId: string): Promise<{ id: string; blob: 
     try {
       res = await fetch(`/api/generate/${encodeURIComponent(jobId)}`, { cache: "no-store" });
     } catch {
-      if (Date.now() - lastContact > OFFLINE_GIVE_UP_MS) throw new GenerationError(LOST, true);
+      // network error — handled below
     }
+    // our server answered but couldn't reach the design studio for a moment: same as being offline
+    if (res?.status === 503 && (await res.clone().json().catch(() => ({}))).offline) res = null;
     if (res) {
       lastContact = Date.now();
       if (res.status === 202) {
@@ -75,6 +77,8 @@ export async function waitForDesign(jobId: string): Promise<{ id: string; blob: 
       } else {
         throw await errorFrom(res);
       }
+    } else if (Date.now() - lastContact > OFFLINE_GIVE_UP_MS) {
+      throw new GenerationError(LOST, true);
     }
     await sleep(POLL_MS);
   }

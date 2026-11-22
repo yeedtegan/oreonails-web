@@ -14,6 +14,9 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // MediaPipe runtime copied on postinstall
     "public/mediapipe/**",
+    // Cloudflare Workers build output (OpenNext / wrangler)
+    ".open-next/**",
+    ".wrangler/**",
   ]),
 ]);
 

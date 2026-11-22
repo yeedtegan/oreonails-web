@@ -1,15 +1,7 @@
-import http from "node:http";
-import https from "node:https";
 import { NextResponse } from "next/server";
 import { ACCEPTED_TYPES, MAX_FILE_BYTES, MAX_PROMPT, MORE_STYLES, STYLES } from "@/lib/constants";
-import { startJob, type JobResult } from "@/lib/server/jobs";
-
-/** Image-generation service: POST /generate-image, multipart { image, prompt } → image bytes. */
-const IMAGE_API_URL = process.env.IMAGE_API_URL ?? "http://127.0.0.1:8791";
-/** Same as IMAGE_API_TOKEN on oreonails-api (required by it when it listens beyond 127.0.0.1). */
-const IMAGE_API_TOKEN = process.env.IMAGE_API_TOKEN ?? "";
-/** Generation takes a few minutes; Node's fetch gives up on headers after 5 min, so use node:http. */
-const UPSTREAM_TIMEOUT_MS = 10 * 60 * 1000;
+import { accountApi } from "@/lib/server/account";
+import { BUSY, NO_STORE, REJECTED, UNAVAILABLE } from "@/lib/server/generateErrors";
 
 const STYLE_LABELS = new Map([...STYLES, ...MORE_STYLES].map((s) => [s.id as string, s.label]));
 
@@ -40,51 +32,6 @@ function buildEditPrompt(instruction: string) {
   ].join(" ");
 }
 
-type Upstream = { status: number; contentType: string; jobId?: string; body: Buffer };
-
-async function callImageApi(image: File, prompt: string): Promise<Upstream> {
-  const form = new FormData();
-  form.append("image", image, image.name || "hand.png");
-  form.append("prompt", prompt);
-  // let the platform encode the multipart body + boundary for us
-  const encoded = new Request("http://localhost", { method: "POST", body: form });
-  const payload = Buffer.from(await encoded.arrayBuffer());
-
-  const url = new URL("/generate-image", IMAGE_API_URL);
-  const client = url.protocol === "https:" ? https : http;
-
-  return new Promise((resolve, reject) => {
-    const req = client.request(
-      url,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": encoded.headers.get("content-type")!,
-          "Content-Length": payload.length,
-          ...(IMAGE_API_TOKEN ? { Authorization: `Bearer ${IMAGE_API_TOKEN}` } : {}),
-        },
-        timeout: UPSTREAM_TIMEOUT_MS,
-      },
-      (res) => {
-        const chunks: Buffer[] = [];
-        res.on("data", (c: Buffer) => chunks.push(c));
-        res.on("end", () =>
-          resolve({
-            status: res.statusCode ?? 502,
-            contentType: String(res.headers["content-type"] ?? ""),
-            jobId: res.headers["x-job-id"] as string | undefined,
-            body: Buffer.concat(chunks),
-          }),
-        );
-        res.on("error", reject);
-      },
-    );
-    req.on("timeout", () => req.destroy(new Error("timeout")));
-    req.on("error", reject);
-    req.end(payload);
-  });
-}
-
 export async function POST(req: Request) {
   const form = await req.formData();
   const image = form.get("image");
@@ -111,53 +58,24 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Describe your design or choose a style." }, { status: 400 });
   }
 
-  // generation takes minutes: run it as a background job the browser polls
-  // (GET /api/generate/<jobId>), so leaving the page doesn't lose it
+  // generation takes minutes: oreonails-api runs it as a background job and the browser polls
+  // GET /api/generate/<jobId> (short requests — fine on Workers, and leaving the page doesn't lose it)
   const finalPrompt = mode === "edit" ? buildEditPrompt(prompt) : buildPrompt(prompt, styles);
-  const jobId = startJob(() => generate(image, finalPrompt));
-  return NextResponse.json({ jobId }, { status: 202, headers: { "Cache-Control": "no-store" } });
-}
-
-async function generate(image: File, prompt: string): Promise<JobResult> {
-  let upstream: Upstream;
-  try {
-    upstream = await callImageApi(image, prompt);
-  } catch (err) {
-    const timedOut = err instanceof Error && err.message === "timeout";
+  const upstreamForm = new FormData();
+  upstreamForm.append("image", image, image.name || "hand.png");
+  upstreamForm.append("prompt", finalPrompt);
+  const res = await accountApi("/generate-image/jobs", { method: "POST", body: upstreamForm }).catch((err) => {
     console.error("[generate] image API unreachable:", err);
-    return {
-      status: "error",
-      httpStatus: timedOut ? 504 : 503,
-      error: timedOut
-        ? "Your design is taking longer than usual. Please try again in a few minutes."
-        : "Our design studio is unavailable right now. Please try again in a few minutes.",
-      retryable: true,
-    };
+    return null;
+  });
+  if (!res) return NextResponse.json({ error: UNAVAILABLE, retryable: true }, { status: 503, headers: NO_STORE });
+  const data = (await res.json().catch(() => ({}))) as { jobId?: string; error?: string };
+  if (res.status === 202 && data.jobId) {
+    return NextResponse.json({ jobId: data.jobId }, { status: 202, headers: NO_STORE });
   }
-
-  if (upstream.status !== 200 || !upstream.contentType.startsWith("image/")) {
-    let detail = "";
-    try {
-      detail = JSON.parse(upstream.body.toString("utf8")).error ?? "";
-    } catch {}
-    console.error("[generate] image API error", upstream.status, detail);
-    // 5xx = the generator failed on its side (lost state, busy…): temporary, ask to retry later.
-    // 4xx = it rejected this request: retrying the same photo will not help.
-    const temporary = upstream.status >= 500 || upstream.status === 200;
-    return temporary
-      ? {
-          status: "error",
-          httpStatus: 503,
-          error: "Our design studio is busy right now and couldn't finish your design. Please try again in a few minutes.",
-          retryable: true,
-        }
-      : {
-          status: "error",
-          httpStatus: 422,
-          error: "We couldn't create a design from this photo. Please try a clearer photo of your hand.",
-          retryable: false,
-        };
+  console.error("[generate] image API refused the job", res.status, data.error ?? "");
+  if (res.status === 429 || res.status >= 500) {
+    return NextResponse.json({ error: BUSY, retryable: true }, { status: 503, headers: NO_STORE });
   }
-
-  return { status: "done", contentType: upstream.contentType, body: upstream.body, upstreamJobId: upstream.jobId };
+  return NextResponse.json({ error: REJECTED, retryable: false }, { status: 422, headers: NO_STORE });
 }
