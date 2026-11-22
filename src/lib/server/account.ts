@@ -45,7 +45,19 @@ export async function relay(res: Response | null): Promise<NextResponse> {
   if (!res) {
     return NextResponse.json({ error: "Our store is unavailable right now. Please try again in a few minutes." }, { status: 503 });
   }
-  const data = await res.json().catch(() => ({ error: "Unexpected answer from our store." }));
+  const text = await res.text().catch(() => "");
+  let data: unknown;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    // not oreonails-api talking (e.g. a Cloudflare error page: tunnel down 502/530, timeout 524) — log what it was
+    console.error(`[account] non-JSON answer from oreonails-api: ${res.status} ${res.url}`, text.slice(0, 300));
+    const down = res.status >= 500;
+    return NextResponse.json(
+      { error: down ? "Our store is unavailable right now. Please try again in a few minutes." : "Unexpected answer from our store." },
+      { status: down ? 503 : 502, headers: { "Cache-Control": "no-store" } },
+    );
+  }
   return NextResponse.json(data, { status: res.status, headers: { "Cache-Control": "no-store" } });
 }
 
