@@ -174,18 +174,36 @@ export default function ResultView({ session, update, initialVersionId, onNewDes
     const touch = window.matchMedia("(pointer: coarse)");
     const root = document.documentElement;
     const vv = window.visualViewport;
+    // the tallest viewport seen at this width = the screen without a keyboard (Android may shrink innerHeight too)
+    let full = 0;
+    let fullWidth = 0;
+    let focusedAt = 0;
     const apply = () => {
       const app = phone.matches;
       document.body.classList.toggle("studio-app", app);
       const h = vv ? vv.height : window.innerHeight;
       root.style.setProperty("--vvh", `${Math.round(h)}px`);
+      if (window.innerWidth !== fullWidth) {
+        fullWidth = window.innerWidth;
+        full = 0;
+      }
+      full = Math.max(full, h, window.innerHeight);
       const el = document.activeElement;
       const typing = !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA") && touch.matches;
-      // iOS shrinks only the visual viewport; Android shrinks both — the focused text field covers that case
-      setKeyboard(app && (window.innerHeight - h > 140 || typing));
+      // the focused field only counts right after focusing (before the viewport has shrunk): a keyboard closed
+      // with the back gesture leaves the field focused, and the design must come back then
+      const opening = typing && Date.now() - focusedAt < 700;
+      setKeyboard(app && (full - h > 140 || opening));
       if (app && window.scrollY) window.scrollTo(0, 0); // iOS scrolls the page up to the field
     };
-    const later = () => setTimeout(apply, 60);
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    const later = (e: Event) => {
+      if (e.type === "focusin") {
+        focusedAt = Date.now();
+        timers.push(setTimeout(apply, 800)); // re-check once the "just focused" window is over
+      }
+      timers.push(setTimeout(apply, 60));
+    };
     const raf = requestAnimationFrame(apply);
     vv?.addEventListener("resize", apply);
     vv?.addEventListener("scroll", apply);
@@ -195,6 +213,7 @@ export default function ResultView({ session, update, initialVersionId, onNewDes
     document.addEventListener("focusout", later);
     return () => {
       cancelAnimationFrame(raf);
+      timers.forEach(clearTimeout);
       vv?.removeEventListener("resize", apply);
       vv?.removeEventListener("scroll", apply);
       window.removeEventListener("resize", apply);
@@ -270,6 +289,7 @@ export default function ResultView({ session, update, initialVersionId, onNewDes
     if (!text || working) return;
     setInput("");
     send(text);
+    inputRef.current?.blur(); // close the keyboard so the design (and its update) is in view
   }
 
   function retry(msg: Message) {
