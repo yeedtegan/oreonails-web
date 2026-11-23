@@ -1,19 +1,25 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type ComponentType, type FormEvent, type SVGProps } from "react";
 import { useCart } from "./CartContext";
 import {
   ArrowLeftIcon,
   CartIcon,
+  ChatIcon,
+  CheckIcon,
+  ChevronRightIcon,
   CloseIcon,
   ExpandIcon,
   GalleryIcon,
   HeartIcon,
+  HistoryIcon,
+  PencilIcon,
   SendIcon,
   ShareIcon,
   SparkleIcon,
+  UserIcon,
 } from "./icons";
-import { DESIGN_PRICE, MAX_PROMPT, REFINEMENTS } from "@/lib/constants";
+import { DESIGN_PRICE, MAX_PROMPT, QUICK_ADD, QUICK_ADD_CATEGORIES, type QuickAddCategory } from "@/lib/constants";
 import { GenerationError, startDesign, waitForDesign } from "@/lib/generate";
 import type { StoredMessage, StoredVersion } from "@/lib/designStore";
 import { uid } from "@/lib/uid";
@@ -44,6 +50,23 @@ type Props = {
 const price = `$${DESIGN_PRICE.toFixed(2)}`;
 const fmtTime = (t: number) => new Date(t).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 
+/** "Today", "Yesterday" or "Nov 19, 2026" */
+function dayLabel(t: number) {
+  const day = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const diff = Math.round((day(new Date()) - day(new Date(t))) / 86_400_000);
+  if (diff === 0) return "Today";
+  if (diff === 1) return "Yesterday";
+  return new Date(t).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+type Tab = "chat" | "quick" | "history";
+/** Quick Add is its own column from 1180px — its tab is only shown below that */
+const TABS: { id: Tab; label: string; icon: ComponentType<SVGProps<SVGSVGElement>>; className?: string }[] = [
+  { id: "chat", label: "Chat", icon: ChatIcon },
+  { id: "quick", label: "Quick Add", icon: SparkleIcon, className: "nav:hidden" },
+  { id: "history", label: "History", icon: GalleryIcon },
+];
+
 /** edits still waiting for the server (by pending message id), across screen changes */
 const inFlight = new Set<string>();
 export const isEditInFlight = (messageId: string) => inFlight.has(messageId);
@@ -61,7 +84,14 @@ export async function followEdit(msg: Message & { jobId: string }, update: Sessi
   inFlight.add(msg.id);
   try {
     const { id, blob } = await waitForDesign(msg.jobId);
-    const version: DesignVersion = { id, blob, url: URL.createObjectURL(blob), instruction: msg.retry?.text ?? "", favorite: false };
+    const version: DesignVersion = {
+      id,
+      blob,
+      url: URL.createObjectURL(blob),
+      instruction: msg.retry?.text ?? "",
+      favorite: false,
+      createdAt: Date.now(),
+    };
     update((s) => ({
       ...s,
       // the same job could be collected twice (two tabs): keep one copy
@@ -93,20 +123,6 @@ export const greeting = (): Message => ({
   text: "Your custom design is ready! ✨ Tell me what you'd like to change — for example “Add more pearls and a touch of glitter”.",
 });
 
-function RoundButton({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      title={label}
-      onClick={onClick}
-      className="grid h-10 w-10 place-items-center rounded-full bg-black/35 text-white backdrop-blur transition hover:bg-black/55 lg:h-11 lg:w-11"
-    >
-      {children}
-    </button>
-  );
-}
-
 export default function ResultView({ session, update, initialVersionId, onNewDesign, onNewPhoto }: Props) {
   const cart = useCart();
   const { versions, messages } = session;
@@ -124,7 +140,11 @@ export default function ResultView({ session, update, initialVersionId, onNewDes
     if (versions.length > versionCount) setSelectedId(versions[versions.length - 1].id);
   }
   const [lightbox, setLightbox] = useState(false);
-  const [viewAll, setViewAll] = useState(false);
+  /** which panel shows in the middle column (phones: under the design) */
+  const [tab, setTab] = useState<Tab>("chat");
+  /** Quick Add details picked for the next "Generate" */
+  const [picked, setPicked] = useState<string[]>([]);
+  const [filter, setFilter] = useState<QuickAddCategory | "all">("all");
   const [toast, setToast] = useState<string | null>(null);
 
   const inputRef = useRef<HTMLInputElement>(null);
@@ -145,20 +165,25 @@ export default function ResultView({ session, update, initialVersionId, onNewDes
   const selected = versions[selectedIndex];
   const inCart = cart.has(selected.id);
 
+  // newest first, grouped by day (designs saved before dates were kept use the session's date)
+  const historyGroups: { label: string; items: { v: DesignVersion; n: number }[] }[] = [];
+  versions
+    .map((v, i) => ({ v, n: i + 1, t: v.createdAt ?? session.createdAt }))
+    .reverse()
+    .forEach(({ v, n, t }) => {
+      const label = dayLabel(t);
+      const group = historyGroups.find((g) => g.label === label);
+      if (group) group.items.push({ v, n });
+      else historyGroups.push({ label, items: [{ v, n }] });
+    });
+
   function showToast(text: string) {
     setToast(text);
     clearTimeout(toastTimer.current);
     toastTimer.current = setTimeout(() => setToast(null), 2200);
   }
 
-  function addRefinement(text: string) {
-    setInput((cur) => {
-      const base = cur.trim().replace(/[,.]$/, "");
-      const next = base ? `${base}, ${text}` : text.charAt(0).toUpperCase() + text.slice(1);
-      return next.slice(0, MAX_PROMPT);
-    });
-    inputRef.current?.focus();
-  }
+  const togglePick = (id: string) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
 
   async function edit(text: string, baseId: string) {
     const base = versions.find((v) => v.id === baseId) ?? selected;
@@ -198,9 +223,8 @@ export default function ResultView({ session, update, initialVersionId, onNewDes
     e.preventDefault();
     const text = input.trim();
     if (!text || working) return;
-    update((s) => ({ ...s, messages: [...s.messages, { id: uid(), role: "user", time: Date.now(), text }] }));
     setInput("");
-    edit(text, selected.id);
+    send(text);
   }
 
   function retry(msg: Message) {
@@ -209,8 +233,31 @@ export default function ResultView({ session, update, initialVersionId, onNewDes
     edit(msg.retry.text, msg.retry.baseId);
   }
 
-  function toggleFavorite() {
-    update((s) => ({ ...s, versions: s.versions.map((v) => (v.id === selected.id ? { ...v, favorite: !v.favorite } : v)) }));
+  function toggleFavorite(id: string) {
+    update((s) => ({ ...s, versions: s.versions.map((v) => (v.id === id ? { ...v, favorite: !v.favorite } : v)) }));
+  }
+
+  function send(text: string) {
+    update((s) => ({ ...s, messages: [...s.messages, { id: uid(), role: "user", time: Date.now(), text }] }));
+    edit(text, selected.id);
+  }
+
+  /** the picked Quick Add details as one edit */
+  function generatePicked() {
+    if (working) return;
+    if (!picked.length) return showToast("Pick at least one detail");
+    const parts = QUICK_ADD.filter((q) => picked.includes(q.id)).map((q) => q.text);
+    const text = parts.join(", ");
+    send(text.charAt(0).toUpperCase() + text.slice(1));
+    setPicked([]);
+    setTab("chat");
+  }
+
+  /** History → pencil: keep editing from that version */
+  function editFrom(id: string) {
+    setSelectedId(id);
+    setTab("chat");
+    setTimeout(() => inputRef.current?.focus());
   }
 
   async function share() {
@@ -238,240 +285,375 @@ export default function ResultView({ session, update, initialVersionId, onNewDes
     showToast("Added to cart");
   }
 
+  const designLabel = (n: number, v: DesignVersion) => `Design ${n}${n === 1 ? " (original)" : `: ${v.instruction}`}`;
+  const pickedItems = QUICK_ADD.filter((q) => picked.includes(q.id));
+  /** at 1180px+ the Quick Add tab doesn't exist: the middle column shows the chat instead */
+  const show = (t: Tab) => (tab === t ? "flex" : t === "chat" && tab === "quick" ? "hidden nav:flex" : "hidden");
+  const pane = "tab:rounded-[18px] tab:border tab:border-line tab:bg-ivory tab:px-[18px] tab:py-4 tab:soft-shadow";
+  const overlayBtn = "grid h-[46px] w-[46px] place-items-center rounded-full bg-cocoa/70 text-white transition hover:bg-cocoa/85";
+  /** phones: room for the bar fixed at the bottom (chat input / Generate) */
+  const bottomBar = tab === "history" ? "pb-8" : "pb-28 tab:pb-[30px]";
+
+  const generateButton = (extra = "") => (
+    <button
+      type="button"
+      onClick={generatePicked}
+      disabled={working}
+      className={`btn-brown flex min-h-14 w-full items-center justify-center gap-2.5 rounded-full text-[19px] font-semibold text-white disabled:opacity-60 ${extra}`}
+    >
+      {working ? <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/40 border-t-white" /> : <SparkleIcon className="h-[22px] w-[22px]" />}
+      {working ? "Updating…" : "Generate"}
+    </button>
+  );
+
   return (
-    <div className="relative z-10 mx-auto w-full max-w-[640px] px-4 pb-28 sm:px-6">
-      {/* ───────────── Result + history ───────────── */}
-      <section aria-label="Your nail design">
-        <div className="mb-3 flex items-center justify-between">
-          <button
-            type="button"
-            onClick={onNewDesign}
-            className="flex items-center gap-1.5 rounded-full px-2 py-1 text-base font-semibold text-cocoa-soft transition hover:bg-white/60 hover:text-cocoa"
-          >
-            <ArrowLeftIcon className="h-5 w-5" />
-            New design
+    // phones: design, then tabs (Chat · Quick Add · History) with the chat input / Generate fixed at the bottom
+    // tablet: design + history · chat/quick/history tabs — desktop (1180px+): + a Quick Add Details column
+    <div className="mx-auto w-full max-w-[97.5rem] px-[clamp(14px,3vw,40px)]">
+      <div
+        className={`grid grid-cols-1 gap-2 pt-2.5 tab:grid-cols-2 tab:gap-[18px] tab:pt-[18px] nav:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)_minmax(0,0.62fr)] ${bottomBar}`}
+      >
+        {/* ───────────── Design + history ───────────── */}
+        <section aria-label="Your nail design" className={`flex flex-col ${pane}`}>
+          <button type="button" onClick={onNewDesign} className="mb-3.5 hidden items-center gap-2.5 self-start text-[16px] tab:flex">
+            <ArrowLeftIcon className="h-[22px] w-[22px]" />
+            New Design
           </button>
-        </div>
 
-        <div className="relative aspect-[4/3] overflow-hidden rounded-3xl bg-cocoa shadow-[0_20px_44px_-22px_rgba(90,50,40,0.75)]">
-          {/* eslint-disable-next-line @next/next/no-img-element -- local blob */}
-          <img src={selected.url} alt="" aria-hidden className="absolute inset-0 h-full w-full scale-110 object-cover opacity-60 blur-xl" />
-          {/* eslint-disable-next-line @next/next/no-img-element -- local blob */}
-          <img
-            src={selected.url}
-            alt={selectedIndex === 0 ? "Your generated nail design" : `Updated nail design: ${selected.instruction}`}
-            className={`absolute inset-0 h-full w-full object-contain transition duration-500 ${working ? "opacity-70 blur-[2px]" : ""}`}
-          />
+          <div className="relative aspect-[1.21] overflow-hidden rounded-[20px] bg-[#ddd]">
+            {/* eslint-disable-next-line @next/next/no-img-element -- local blob */}
+            <img src={selected.url} alt="" aria-hidden className="absolute inset-0 h-full w-full scale-110 object-cover opacity-60 blur-xl" />
+            {/* eslint-disable-next-line @next/next/no-img-element -- local blob */}
+            <img
+              src={selected.url}
+              alt={selectedIndex === 0 ? "Your generated nail design" : `Updated nail design: ${selected.instruction}`}
+              className="absolute inset-0 h-full w-full object-contain transition-opacity duration-300"
+            />
 
-          <div className="absolute top-3 right-3 flex gap-2 lg:top-4 lg:right-4">
-            <RoundButton label={selected.favorite ? "Remove from favorites" : "Add to favorites"} onClick={toggleFavorite}>
-              <HeartIcon filled={selected.favorite} className={`h-5 w-5 ${selected.favorite ? "text-rose-400" : ""}`} />
-            </RoundButton>
-            <RoundButton label="Share" onClick={share}>
-              <ShareIcon className="h-5 w-5" />
-            </RoundButton>
+            {working && (
+              <div className="absolute inset-0 grid place-items-center bg-cream/55 font-medium" role="status">
+                <span className="typing-dots">
+                  Updating your design <span />
+                  <span />
+                  <span />
+                </span>
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={addToCart}
+              disabled={inCart}
+              className="absolute bottom-5 left-1/2 flex min-h-[46px] -translate-x-1/2 items-center gap-3.5 rounded-full border-[1.5px] border-white/70 bg-[rgba(90,52,33,.9)] px-6 whitespace-nowrap text-white disabled:cursor-default"
+            >
+              <CartIcon className="h-[22px] w-[22px]" />
+              {inCart ? "In Cart ✓" : "Add to Cart"}
+              <i className="h-[22px] w-px bg-white/40" aria-hidden />
+              <b className="font-medium">{price}</b>
+            </button>
+
+            {/* share: top right · view larger: next to it on phones, bottom right from tablet up */}
+            <div className="absolute top-3.5 right-3.5 flex gap-2">
+              <button type="button" aria-label="Share" title="Share" onClick={share} className={overlayBtn}>
+                <ShareIcon className="h-5 w-5" />
+              </button>
+              <button type="button" aria-label="View larger" title="View larger" onClick={() => setLightbox(true)} className={`${overlayBtn} tab:hidden`}>
+                <ExpandIcon className="h-5 w-5" />
+              </button>
+            </div>
+            <button
+              type="button"
+              aria-label="View larger"
+              title="View larger"
+              onClick={() => setLightbox(true)}
+              className={`${overlayBtn} absolute right-4 bottom-5 hidden tab:grid`}
+            >
+              <ExpandIcon className="h-5 w-5" />
+            </button>
           </div>
 
-          {working && (
-            <div className="absolute inset-0 grid place-items-center" role="status">
-              <div className="flex items-center gap-3 rounded-2xl bg-white/90 px-5 py-3 shadow-lg backdrop-blur">
-                <span className="h-6 w-6 animate-spin rounded-full border-[3px] border-gold/30 border-t-gold-dark" />
-                <span className="font-serif text-lg text-cocoa">Updating your design…</span>
-              </div>
+          {pickedItems.length > 0 && (
+            <div className="mt-3 flex flex-nowrap items-center gap-2 overflow-x-auto whitespace-nowrap tab:flex-wrap">
+              <span>Selected:</span>
+              {pickedItems.map((q) => (
+                <button key={q.id} type="button" onClick={() => togglePick(q.id)} aria-label={`Remove ${q.label}`} className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-pink-2 px-3.5 py-1.5 text-[14px]">
+                  <SparkleIcon className="h-3.5 w-3.5" />
+                  {q.label}
+                  <CloseIcon className="h-3.5 w-3.5" />
+                </button>
+              ))}
             </div>
           )}
 
-          <button
-            type="button"
-            onClick={addToCart}
-            disabled={inCart}
-            className="btn-brown absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-3 rounded-full border-2 border-white/80 px-5 py-2.5 font-semibold whitespace-nowrap text-white transition active:scale-[0.98] disabled:cursor-default lg:bottom-4 lg:px-6"
-          >
-            <CartIcon className="h-6 w-6" />
-            <span className="text-[17px]">{inCart ? "In Cart ✓" : "Add to Cart"}</span>
-            <span className="h-6 w-px bg-white/50" aria-hidden />
-            <span className="text-[17px]">{price}</span>
-          </button>
-
-          <div className="absolute right-3 bottom-3 lg:right-4 lg:bottom-4">
-            <RoundButton label="View full screen" onClick={() => setLightbox(true)}>
-              <ExpandIcon className="h-5 w-5" />
-            </RoundButton>
-          </div>
-        </div>
-
-        {/* history */}
-        <div className="mt-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-[17px] font-bold text-cocoa">Design History</h2>
-            {versions.length > 4 && (
-              <button type="button" onClick={() => setViewAll((v) => !v)} className="text-[15px] font-semibold text-cocoa">
-                {viewAll ? "Show less" : "View All ›"}
+          {/* tablet+: history strip */}
+          <div className="hidden tab:block">
+            <div className="mt-4 mb-2 flex items-center justify-between text-[16px]">
+              <span>Design History</span>
+              <button type="button" onClick={() => setTab("history")} className="flex items-center gap-1 text-[14px]">
+                View All
+                <ChevronRightIcon className="h-4 w-4" />
               </button>
-            )}
+            </div>
+            <ul className="flex gap-2.5 overflow-x-auto pb-1">
+              {[...versions]
+                .reverse()
+                .slice(0, 6)
+                .map((v) => {
+                  const n = versions.indexOf(v) + 1;
+                  return (
+                    <li key={v.id} className="shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedId(v.id)}
+                        aria-pressed={v.id === selected.id}
+                        aria-label={designLabel(n, v)}
+                        title={n === 1 ? "Original design" : v.instruction}
+                        className={`block h-[46px] w-[76px] overflow-hidden rounded-lg border-2 ${v.id === selected.id ? "border-brown" : "border-transparent"}`}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element -- local blob */}
+                        <img src={v.url} alt="" className="h-full w-full object-cover" />
+                      </button>
+                    </li>
+                  );
+                })}
+            </ul>
           </div>
-          <ul className={`mt-2 gap-2.5 ${viewAll ? "grid grid-cols-4" : "flex overflow-x-auto pb-1"}`}>
-            {[...versions].reverse().map((v) => {
-              const n = versions.indexOf(v) + 1;
-              const active = v.id === selected.id;
+        </section>
+
+        {/* ───────────── Chat · Quick Add · History ───────────── */}
+        <section aria-label="Edit your design" className={`flex min-w-0 flex-col ${pane}`}>
+          <div role="tablist" aria-label="Design tools" className="mb-3 flex border-b border-line">
+            {TABS.map(({ id, label, icon: Icon, className = "" }, k) => {
               return (
-                <li key={v.id} className={viewAll ? "" : "w-[calc(25%-0.47rem)] shrink-0"}>
+                <button
+                  key={id}
+                  role="tab"
+                  type="button"
+                  aria-selected={tab === id}
+                  onClick={() => setTab(id)}
+                  className={`-mb-px flex flex-1 items-center justify-center gap-1.5 border-b-[3px] px-1 py-3 text-[14.5px] whitespace-nowrap tab:flex-none tab:gap-2.5 tab:px-5 tab:text-[16px] ${
+                    tab === id ? "border-brown" : id === "chat" && tab === "quick" ? "border-transparent nav:border-brown" : "border-transparent"
+                  } ${k < TABS.length - 1 ? "max-tab:border-r max-tab:border-r-line" : ""} ${className}`}
+                >
+                  <Icon className="h-[22px] w-[22px]" />
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* chat */}
+          <div className={`min-h-0 flex-1 flex-col ${show("chat")}`}>
+            <div
+              ref={chatRef}
+              className="flex min-h-60 flex-1 flex-col gap-[18px] px-1 py-2.5 [&>*]:scroll-mb-28 tab:max-h-[560px] tab:min-h-80 tab:overflow-y-auto tab:[&>*]:scroll-mb-0"
+              aria-live="polite"
+              aria-label="Chat with the Oreo Nails assistant"
+            >
+              {messages.map((m) => {
+                const me = m.role === "user";
+                return (
+                  <div key={m.id} className={`flex items-start gap-3 ${me ? "flex-row-reverse" : ""}`}>
+                    <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-pink-2" aria-hidden>
+                      {me ? <UserIcon className="h-5 w-5" /> : <SparkleIcon className="h-5 w-5" />}
+                    </span>
+                    <div
+                      className={`max-w-full rounded-[18px] px-[18px] py-3 min-[481px]:max-w-[72%] ${
+                        me ? "rounded-br-[4px] bg-pink" : m.status === "error" ? "bg-wine/10 text-wine" : "bg-pink-2"
+                      }`}
+                    >
+                      {m.status === "pending" && (
+                        <span className="typing-dots mr-1.5 inline-block" aria-hidden>
+                          <span />
+                          <span />
+                          <span />
+                        </span>
+                      )}
+                      {m.text}
+                      {m.retry && (
+                        <button type="button" onClick={() => retry(m)} disabled={working} className="btn-brown btn-label mt-2 block rounded-full px-4 py-1 text-sm text-white disabled:opacity-60">
+                          Try again
+                        </button>
+                      )}
+                    </div>
+                    <time className={`hidden pt-3 text-[12.5px] whitespace-nowrap text-cocoa-soft min-[481px]:block ${me ? "mr-auto" : "ml-auto"}`}>{fmtTime(m.time)}</time>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* phones: fixed to the bottom of the screen · tablet+: bottom of the panel */}
+            <form
+              onSubmit={onSend}
+              className="fixed inset-x-0 bottom-0 z-40 bg-[linear-gradient(transparent,var(--color-cream)_30%)] px-[clamp(14px,3vw,40px)] pt-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] tab:static tab:z-auto tab:bg-none tab:p-0"
+            >
+              <div className="mt-3 flex items-center gap-2.5 rounded-full border border-line bg-white py-1.5 pr-2 pl-[18px] soft-shadow focus-within:border-brown">
+                <button type="button" onClick={onNewPhoto} aria-label="Use a different hand photo" title="Use a different hand photo" className="shrink-0">
+                  <GalleryIcon className="h-[22px] w-[22px]" />
+                </button>
+                <label htmlFor="refine-input" className="sr-only">
+                  Describe a change to your design
+                </label>
+                <input
+                  id="refine-input"
+                  ref={inputRef}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  maxLength={MAX_PROMPT}
+                  autoComplete="off"
+                  placeholder="Type your request to edit the design…"
+                  className="min-h-11 min-w-0 flex-1 bg-transparent text-[16px] outline-none placeholder:text-cocoa-soft"
+                />
+                <button type="submit" disabled={!input.trim() || working} aria-label="Send" className="grid h-11 w-11 shrink-0 place-items-center rounded-full disabled:opacity-40">
+                  {working ? <span className="h-5 w-5 animate-spin rounded-full border-2 border-line border-t-brown" /> : <SendIcon className="h-[22px] w-[22px]" />}
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* quick add tiles (below 1180px) */}
+          <div className={`min-h-0 flex-1 flex-col nav:hidden ${tab === "quick" ? "flex" : "hidden"}`}>
+            <div className="flex gap-2 overflow-x-auto pb-2.5">
+              {[{ id: "all" as const, label: "All" }, ...QUICK_ADD_CATEGORIES].map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  aria-pressed={filter === c.id}
+                  onClick={() => setFilter(c.id)}
+                  className={`shrink-0 rounded-full border px-4 py-[7px] whitespace-nowrap ${filter === c.id ? "border-brown bg-brown text-white" : "border-line bg-white"}`}
+                >
+                  {c.label}
+                </button>
+              ))}
+            </div>
+            <ul className="grid grid-cols-4 gap-[7px] min-[481px]:gap-2.5">
+              {QUICK_ADD.filter((q) => filter === "all" || q.category === filter).map((q) => {
+                const on = picked.includes(q.id);
+                return (
+                  <li key={q.id}>
+                    <button
+                      type="button"
+                      aria-pressed={on}
+                      onClick={() => togglePick(q.id)}
+                      className={`relative w-full overflow-hidden rounded-[14px] bg-white pb-2 text-[12.5px] min-[481px]:text-[14px] ${on ? "border-2 border-brown" : "border border-line"}`}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element -- small static photo */}
+                      <img src={q.image} alt="" className="mb-1.5 aspect-[1.38] w-full object-cover" />
+                      {q.label}
+                      <span
+                        className={`absolute top-[5px] right-[5px] grid h-5 w-5 place-items-center rounded-full border-[1.5px] min-[481px]:top-[7px] min-[481px]:right-[7px] min-[481px]:h-6 min-[481px]:w-6 ${
+                          on ? "border-cocoa bg-cocoa text-white" : "border-[#6d5a52] bg-white"
+                        }`}
+                      >
+                        {on && <CheckIcon className="h-3.5 w-3.5" strokeWidth={3} />}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+            <div className="fixed inset-x-0 bottom-0 z-40 bg-[linear-gradient(transparent,var(--color-cream)_35%)] px-[clamp(14px,3vw,40px)] pt-3.5 pb-[max(0.75rem,env(safe-area-inset-bottom))] tab:sticky tab:inset-x-auto tab:px-0 tab:pb-1">
+              {generateButton()}
+            </div>
+          </div>
+
+          {/* history */}
+          <div className={`min-h-0 flex-1 flex-col ${show("history")}`}>
+            <div className="flex items-center gap-2.5 py-1">
+              <HistoryIcon className="h-[22px] w-[22px]" />
+              <h2 className="text-[20px] font-semibold">Design History</h2>
+              <span className="ml-auto text-[14px] text-cocoa-soft">
+                {versions.length} {versions.length === 1 ? "Design" : "Designs"}
+              </span>
+            </div>
+            {historyGroups.map((g) => (
+              <div key={g.label}>
+                <h3 className="mt-3.5 mb-2.5 inline-block rounded-full bg-pink px-3.5 py-[3px] text-[14px] font-medium">{g.label}</h3>
+                <ul className="grid grid-cols-4 gap-[7px] min-[481px]:gap-2.5">
+                  {g.items.map(({ v, n }) => {
+                    const on = v.id === selected.id;
+                    return (
+                      <li key={v.id} className={`relative aspect-square overflow-hidden rounded-xl border-2 ${on ? "border-cocoa" : "border-transparent"}`}>
+                        <button type="button" onClick={() => setSelectedId(v.id)} aria-pressed={on} aria-label={designLabel(n, v)} className="block h-full w-full">
+                          {/* eslint-disable-next-line @next/next/no-img-element -- local blob */}
+                          <img src={v.url} alt="" className="h-full w-full object-cover" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => toggleFavorite(v.id)}
+                          aria-label={v.favorite ? `Remove design ${n} from favorites` : `Favourite design ${n}`}
+                          className="absolute bottom-1 left-1 grid h-[26px] w-[26px] place-items-center rounded-full bg-white/90 min-[481px]:bottom-1.5 min-[481px]:left-1.5 min-[481px]:h-[30px] min-[481px]:w-[30px]"
+                        >
+                          <HeartIcon filled={v.favorite} className={`h-4 w-4 ${v.favorite ? "text-wine" : ""}`} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => editFrom(v.id)}
+                          aria-label={`Edit design ${n}`}
+                          className="absolute right-1 bottom-1 grid h-[26px] w-[26px] place-items-center rounded-full bg-white/90 min-[481px]:right-1.5 min-[481px]:bottom-1.5 min-[481px]:h-[30px] min-[481px]:w-[30px]"
+                        >
+                          <PencilIcon className="h-4 w-4" />
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* ───────────── Quick Add Details (1180px+) ───────────── */}
+        <section aria-labelledby="quick-add-title" className={`hidden flex-col nav:flex ${pane}`}>
+          <h2 id="quick-add-title" className="flex items-center gap-2.5 pb-3 text-[17px] font-medium">
+            <SparkleIcon className="h-[22px] w-[22px]" />
+            Quick Add Details
+          </h2>
+          <ul className="flex flex-col gap-2.5">
+            {QUICK_ADD.map((q) => {
+              const on = picked.includes(q.id);
+              return (
+                <li key={q.id}>
                   <button
                     type="button"
-                    onClick={() => setSelectedId(v.id)}
-                    aria-pressed={active}
-                    aria-label={`Design ${n}${n === 1 ? " (original)" : `: ${v.instruction}`}`}
-                    title={n === 1 ? "Original design" : v.instruction}
-                    className={`relative block aspect-[4/3] w-full overflow-hidden rounded-xl border-[3px] shadow-md transition ${
-                      active ? "border-[#5a3523]" : "border-white hover:-translate-y-0.5"
-                    }`}
+                    aria-pressed={on}
+                    onClick={() => togglePick(q.id)}
+                    className={`flex min-h-[50px] w-full items-center gap-3.5 rounded-full border py-1.5 pr-4 pl-1.5 text-left text-[15px] ${on ? "border-brown bg-pink-2" : "border-line bg-white"}`}
                   >
-                    {/* eslint-disable-next-line @next/next/no-img-element -- local blob */}
-                    <img src={v.url} alt="" className="h-full w-full object-cover" />
-                    <span className="absolute bottom-1 left-1 rounded-full bg-black/45 px-1.5 text-[11px] font-bold text-white">v{n}</span>
-                    {v.favorite && <HeartIcon filled className="absolute top-1 right-1 h-4 w-4 text-rose-400 drop-shadow" />}
+                    {/* eslint-disable-next-line @next/next/no-img-element -- small static photo */}
+                    <img src={q.image} alt="" className="h-[38px] w-[38px] rounded-full object-cover" />
+                    Add {q.label}
+                    {on && <CheckIcon className="ml-auto h-[18px] w-[18px] text-brown" />}
                   </button>
                 </li>
               );
             })}
           </ul>
-        </div>
-      </section>
-
-      {/* ───────────── Refine with AI ───────────── */}
-      <section aria-label="Refine your design" className="mt-5">
-        <div className="flex flex-col">
-          <h2 className="text-[17px] font-bold text-cocoa">Try Adding More Details</h2>
-          <div className="-mx-4 mt-2 grid auto-cols-max grid-flow-col grid-rows-2 gap-1.5 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:-mx-6 sm:px-6">
-            {REFINEMENTS.map((r) => (
-              <button
-                key={r.label}
-                type="button"
-                onClick={() => addRefinement(r.text)}
-                className="chip flex items-center gap-1 rounded-full px-2.5 py-1.5 font-sans text-[12.5px] font-medium text-cocoa transition hover:-translate-y-0.5 hover:border-gold"
-              >
-                <span aria-hidden>{r.emoji}</span>
-                {r.label}
-              </button>
-            ))}
-          </div>
-
-          <div
-            ref={chatRef}
-            className="mt-4 flex scroll-mb-28 flex-col gap-3 [&>*]:scroll-mb-28"
-            aria-live="polite"
-            aria-label="Chat with the Oreo Nails assistant"
-          >
-            {messages.map((m) =>
-              m.role === "assistant" ? (
-                <div key={m.id} className="flex items-start gap-3">
-                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#f3e3d6] text-cocoa" aria-hidden>
-                    <SparkleIcon className="h-6 w-6" />
-                  </span>
-                  <div
-                    className={`max-w-[80%] rounded-2xl rounded-tl-md px-4 py-2.5 text-[16px] leading-snug ${
-                      m.status === "error" ? "bg-wine/10 text-wine" : "bg-white/85 text-cocoa shadow-sm"
-                    }`}
-                  >
-                    {m.status === "pending" && (
-                      <span className="mr-2 inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-gold/30 border-t-gold-dark align-[-2px]" />
-                    )}
-                    {m.text}
-                    {m.retry && (
-                      <button
-                        type="button"
-                        onClick={() => retry(m)}
-                        disabled={working}
-                        className="btn-gold mt-2 block rounded-full px-4 py-1 text-sm font-semibold text-white disabled:opacity-60"
-                      >
-                        Try again
-                      </button>
-                    )}
-                  </div>
-                  <time className="mt-1 ml-auto shrink-0 text-xs text-cocoa-soft">{fmtTime(m.time)}</time>
-                </div>
-              ) : (
-                <div key={m.id} className="flex items-start justify-end gap-3">
-                  <time className="mt-1 shrink-0 text-xs text-cocoa-soft">{fmtTime(m.time)}</time>
-                  <div className="max-w-[80%] rounded-2xl rounded-tr-md bg-[#74482f] px-4 py-2.5 text-[16px] leading-snug text-white">
-                    {m.text}
-                  </div>
-                </div>
-              ),
-            )}
-          </div>
-
-          {/* chat input: always fixed to the bottom, aligned with the 640px column */}
-          <form
-            onSubmit={onSend}
-            className="fixed inset-x-0 bottom-0 z-40 flex items-center gap-2.5 border-t border-gold/20 bg-[#f6eee6]/95 px-[max(1rem,calc((100%-640px)/2+1rem))] pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur sm:px-[max(1.5rem,calc((100%-640px)/2+1.5rem))]"
-          >
-            <button
-              type="button"
-              onClick={onNewPhoto}
-              aria-label="Use a different hand photo"
-              title="Use a different hand photo"
-              className="grid h-12 w-12 shrink-0 place-items-center rounded-xl text-cocoa transition hover:bg-white/70"
-            >
-              <GalleryIcon className="h-8 w-8" />
-            </button>
-            <label htmlFor="refine-input" className="sr-only">
-              Describe a change to your design
-            </label>
-            <input
-              id="refine-input"
-              ref={inputRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              maxLength={MAX_PROMPT}
-              autoComplete="off"
-              placeholder="Add more glitter and a small bow on ring finger"
-              className="h-12 min-w-0 flex-1 rounded-full border border-gold/25 bg-white px-5 text-[16px] text-cocoa shadow-sm outline-none transition placeholder:text-cocoa-soft/70 focus:border-gold focus:ring-4 focus:ring-gold/15"
-            />
-            <button
-              type="submit"
-              disabled={!input.trim() || working}
-              aria-label="Send"
-              className="btn-brown grid h-12 w-14 shrink-0 place-items-center rounded-xl text-white transition active:scale-95 disabled:opacity-50"
-            >
-              {working ? (
-                <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/40 border-t-white" />
-              ) : (
-                <SendIcon className="h-6 w-6" />
-              )}
-            </button>
-          </form>
-        </div>
-      </section>
+          {generateButton("mt-4")}
+        </section>
+      </div>
 
       {lightbox && (
         <div
           role="dialog"
           aria-modal="true"
-          aria-label="Nail design, full screen"
-          className="fixed inset-0 z-50 grid place-items-center bg-black/90 p-4"
+          aria-label="Nail design, larger"
+          className="fixed inset-0 z-[60] grid place-items-center bg-cocoa/45 p-5"
           onClick={() => setLightbox(false)}
           onKeyDown={(e) => e.key === "Escape" && setLightbox(false)}
         >
-          {/* eslint-disable-next-line @next/next/no-img-element -- local blob */}
-          <img src={selected.url} alt="Your nail design" className="max-h-full max-w-full rounded-xl object-contain" />
-          <button
-            type="button"
-            autoFocus
-            onClick={() => setLightbox(false)}
-            aria-label="Close full screen"
-            className="absolute top-4 right-4 grid h-11 w-11 place-items-center rounded-full bg-white/15 text-white hover:bg-white/25"
-          >
-            <CloseIcon className="h-6 w-6" />
-          </button>
+          <div className="text-center" onClick={(e) => e.stopPropagation()}>
+            {/* eslint-disable-next-line @next/next/no-img-element -- local blob */}
+            <img src={selected.url} alt="Your nail design" className="max-h-[70vh] rounded-2xl" />
+            <button type="button" autoFocus onClick={() => setLightbox(false)} className="btn-brown btn-label mt-3 min-h-11 rounded-full px-[22px] text-white">
+              Close
+            </button>
+          </div>
         </div>
       )}
 
       {toast && (
-        <div
-          role="status"
-          className="fixed bottom-24 left-1/2 z-50 -translate-x-1/2 rounded-full bg-cocoa px-5 py-2.5 text-[15px] font-semibold text-white shadow-xl"
-        >
+        <div role="status" className="fixed bottom-24 left-1/2 z-[70] -translate-x-1/2 rounded-full bg-cocoa px-[22px] py-3 text-[14px] whitespace-nowrap text-white">
           {toast}
         </div>
       )}

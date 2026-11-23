@@ -2,127 +2,211 @@
 
 import Link from "next/link";
 import { useCart } from "./CartContext";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import CartPanel from "./CartPanel";
 import AccountMenu from "./AccountMenu";
 import {
+  BagIcon,
   CartIcon,
+  ChevronRightIcon,
   CloseIcon,
-  CrownIcon,
-  GalleryIcon,
-  InfoIcon,
+  CrownOutlineIcon,
+  GiftIcon,
+  FootIcon,
+  LayersIcon,
   MenuIcon,
-  PlayIcon,
+  SearchIcon,
   SparkleIcon,
+  ToolIcon,
 } from "./icons";
 
-const NAV = [
-  { label: "Custom Nail", href: "#studio", icon: SparkleIcon, active: true },
-  { label: "Gallery", href: "#gallery", icon: GalleryIcon },
-  { label: "How It Works", href: "#how-it-works", icon: PlayIcon },
-  { label: "About Us", href: "#about", icon: InfoIcon },
-];
+export type NavId = "custom" | "shop" | "holiday" | "toenails" | "best" | "bundles" | "tools";
 
-export function Logo() {
+/** Shop menu (the custom studio has its own button) */
+const SHOP_NAV: { id: NavId; label: string; href: string; icon: typeof BagIcon; badge?: string }[] = [
+  { id: "shop", label: "Shop", href: "/shop", icon: BagIcon },
+  { id: "holiday", label: "Holiday Glam", href: "/shop?collection=holiday", icon: GiftIcon, badge: "NEW" },
+  { id: "toenails", label: "Toenails", href: "/shop?category=toenails", icon: FootIcon },
+  { id: "best", label: "Best Sellers", href: "/shop?best=1", icon: CrownOutlineIcon },
+  { id: "bundles", label: "Bundles", href: "/shop?category=bundles", icon: LayersIcon },
+  { id: "tools", label: "Tools", href: "/shop?category=tools", icon: ToolIcon },
+];
+const CUSTOM = { id: "custom" as const, label: "Custom Nail", href: "/", icon: SparkleIcon };
+
+/** Oreo Nails logo (crown + wordmark + "Custom nail design") */
+export function Logo({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
+  const h = { sm: "h-11", md: "h-[52px] nav:h-[58px]", lg: "h-[90px]" }[size];
   return (
-    <Link href="/" className="group flex flex-col items-center leading-none" aria-label="Oreo Nails home">
-      <span className="relative">
-        <CrownIcon className="absolute -top-5 left-[58%] hidden h-6 w-11 -translate-x-1/2 lg:block" />
-        <span className="font-serif text-[2.125rem] font-medium italic tracking-tight text-[#4a3128] sm:text-[2.5rem] lg:gold-text lg:text-[2.875rem] lg:font-semibold">
-          Oreo Nails
-        </span>
-      </span>
-      <span className="mt-1 flex items-center gap-2 whitespace-nowrap text-[0.6562rem] font-semibold uppercase tracking-[0.18em] text-cocoa lg:tracking-[0.32em] lg:text-cocoa-soft">
-        <span className="h-px w-5 bg-cocoa/50 lg:bg-gold/60" />
-        Custom Nail Design
-        <span className="h-px w-5 bg-cocoa/50 lg:bg-gold/60" />
-      </span>
+    <Link href="/" className="block shrink-0" aria-label="Oreo Nails home">
+      {/* eslint-disable-next-line @next/next/no-img-element -- small static logo */}
+      <img src="/brand/logo.png" alt="Oreo Nails — Custom nail design" width={255} height={93} className={`${h} w-auto`} />
     </Link>
   );
 }
 
-export default function Header() {
+/** search the Shop (GET /shop?q=…) */
+function SearchBar({ onClose }: { onClose: () => void }) {
+  return (
+    <form action="/shop" role="search" className="mx-auto flex w-full max-w-[97.5rem] items-center gap-2 px-[clamp(14px,3vw,40px)] pb-3">
+      <label htmlFor="site-search" className="sr-only">
+        Search nail sets
+      </label>
+      <div className="flex h-11 flex-1 items-center gap-2 rounded-full border border-line bg-ivory px-4 focus-within:border-brown">
+        <SearchIcon className="h-5 w-5 text-cocoa-soft" />
+        <input
+          id="site-search"
+          name="q"
+          type="search"
+          autoFocus
+          placeholder="Search sets…"
+          className="h-full min-w-0 flex-1 bg-transparent text-[16px] text-cocoa outline-none placeholder:text-cocoa-soft"
+        />
+      </div>
+      <button type="submit" className="btn-brown btn-label h-11 rounded-full px-5 text-white">
+        Search
+      </button>
+      <button type="button" onClick={onClose} aria-label="Close search" className="grid h-11 w-11 place-items-center rounded-full text-cocoa">
+        <CloseIcon className="h-5 w-5" />
+      </button>
+    </form>
+  );
+}
+
+export default function Header({ active }: { active: NavId }) {
   const [open, setOpen] = useState(false);
-  const cartCount = useCart().items.length;
+  const [searching, setSearching] = useState(false);
+  const cartCount = useCart().count;
   const [cartOpen, setCartOpen] = useState(false);
   const closeCart = useCallback(() => setCartOpen(false), []);
+  const round = "relative grid h-11 w-11 shrink-0 place-items-center rounded-full text-cocoa transition";
+  const soft = `${round} bg-white soft-shadow hover:bg-ivory`;
+
+  // menu drawer (phones/tablets): Escape closes it, the page behind doesn't scroll
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("keydown", onKey);
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = overflow;
+    };
+  }, [open]);
 
   return (
-    // Sticky full-width bar: stays at the top while scrolling; translucent cream + blur so content passing underneath
-    // doesn't clash with the logo/nav. Mobile menu + cart panel still hang right under it (absolute, top-full).
-    <div className="sticky top-0 z-30 border-b border-gold/15 bg-cream/85 backdrop-blur-md">
-    <header className="relative mx-auto grid w-full max-w-[87.5rem] grid-cols-[1fr_auto_1fr] items-center gap-2 px-4 pt-5 pb-3 sm:px-8 lg:flex lg:justify-between lg:gap-4 lg:px-12 lg:pt-7 lg:pb-4">
-      <button
-        type="button"
-        aria-label={open ? "Close menu" : "Open menu"}
-        aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
-        className="-ml-1 grid h-11 w-11 place-items-center justify-self-start rounded-full text-cocoa lg:hidden"
-      >
-        {open ? <CloseIcon className="h-7 w-7" /> : <MenuIcon className="h-8 w-8" />}
-      </button>
+    <>
+      {/* Sticky bar, translucent cream + blur. The menu and cart drawers are rendered outside it:
+          backdrop-filter would trap their `fixed` position. */}
+      <div className="sticky top-0 z-30 border-b border-line bg-cream/95 backdrop-blur-md">
+        <header className="relative mx-auto flex h-[76px] w-full max-w-[97.5rem] items-center justify-between gap-[18px] px-[clamp(14px,3vw,40px)] nav:h-[84px] nav:justify-start">
+          <button type="button" aria-label="Open menu" aria-expanded={open} onClick={() => setOpen(true)} className={`${round} nav:hidden`}>
+            <MenuIcon className="h-6 w-6" />
+          </button>
 
-      <Logo />
+          <div className="absolute left-1/2 -translate-x-1/2 nav:static nav:translate-x-0">
+            <Logo />
+          </div>
 
-      <nav className="hidden items-center gap-2 lg:flex" aria-label="Main">
-        {NAV.map(({ label, href, icon: Icon, active }) => (
-          <a
-            key={label}
-            href={href}
-            aria-current={active ? "page" : undefined}
-            className={
-              active
-                ? "btn-gold flex items-center gap-2 rounded-full px-6 py-2.5 font-serif text-[1.0625rem] text-white"
-                : "flex items-center gap-2 rounded-full px-4 py-2.5 font-serif text-[1.0625rem] text-cocoa transition hover:bg-white/60"
-            }
+          <nav className="hidden flex-1 flex-wrap items-center gap-1 nav:flex" aria-label="Main">
+            {SHOP_NAV.map(({ id, label, href, badge }) => (
+              <Link
+                key={id}
+                href={href}
+                aria-current={active === id ? "page" : undefined}
+                className={`rounded-full px-3.5 py-2 text-[14.5px] whitespace-nowrap transition ${
+                  active === id ? "bg-brown text-white" : "text-cocoa hover:bg-pink-2"
+                }`}
+              >
+                {label}
+                {badge && <span className="ml-1 rounded-lg bg-brown px-1.5 py-px text-[10px] text-white">{badge}</span>}
+              </Link>
+            ))}
+          </nav>
+
+          <span className="hidden h-[34px] w-px bg-line nav:block" />
+          <Link
+            href={CUSTOM.href}
+            aria-current={active === "custom" ? "page" : undefined}
+            className="btn-brown btn-label hidden min-h-11 items-center gap-2.5 rounded-full px-[22px] text-white nav:inline-flex"
           >
-            <Icon className="h-6 w-6" />
-            {label}
-          </a>
-        ))}
-      </nav>
+            <SparkleIcon className="h-[22px] w-[22px]" />
+            {CUSTOM.label}
+          </Link>
 
-      <div className="flex items-center gap-2 justify-self-end sm:gap-3">
-        <AccountMenu />
-        <span className="hidden h-8 w-px bg-gold/30 lg:block" />
-        <button
-          type="button"
-          aria-label={`Cart, ${cartCount} items`}
-          aria-expanded={cartOpen}
-          data-cart-toggle
-          onClick={() => setCartOpen((v) => !v)}
-          className="relative grid h-11 w-11 place-items-center rounded-full bg-white/80 text-cocoa shadow-md ring-1 ring-gold/20 transition hover:bg-white lg:h-12 lg:w-12"
-        >
-          <CartIcon className="h-6 w-6" />
-          <span className="absolute -top-1 -right-1 grid h-5 min-w-5 place-items-center rounded-full bg-gold-dark px-1 text-[0.6875rem] font-bold text-white">
-            {cartCount}
-          </span>
-        </button>
+          <div className="flex items-center gap-1.5">
+            <button type="button" aria-label="Search" aria-expanded={searching} onClick={() => setSearching((v) => !v)} className={`${round} hidden hover:bg-pink-2 nav:grid`}>
+              <SearchIcon className="h-[22px] w-[22px]" />
+            </button>
+            <AccountMenu className={soft} />
+            <button
+              type="button"
+              aria-label={`Cart, ${cartCount} items`}
+              aria-expanded={cartOpen}
+              data-cart-toggle
+              onClick={() => setCartOpen((v) => !v)}
+              className={soft}
+            >
+              <CartIcon className="h-[22px] w-[22px]" />
+              <span className="absolute -top-0.5 -right-0.5 grid h-[19px] min-w-[19px] place-items-center rounded-[10px] bg-cocoa px-1 text-[11px] text-white">
+                {cartCount}
+              </span>
+            </button>
+          </div>
+        </header>
+        {searching && <SearchBar onClose={() => setSearching(false)} />}
       </div>
 
       {cartOpen && <CartPanel onClose={closeCart} />}
 
+      {/* phones/tablets: menu drawer from the left */}
       {open && (
-        <nav
-          aria-label="Mobile"
-          className="glass-card absolute inset-x-4 top-full z-30 flex flex-col gap-1 rounded-2xl p-3 lg:hidden"
-        >
-          {NAV.map(({ label, href, icon: Icon, active }) => (
-            <a
-              key={label}
-              href={href}
-              onClick={() => setOpen(false)}
-              className={`flex items-center gap-3 rounded-xl px-4 py-3 font-serif text-lg ${
-                active ? "btn-gold text-white" : "text-cocoa hover:bg-white/70"
-              }`}
-            >
-              <Icon className="h-5 w-5" />
-              {label}
-            </a>
-          ))}
-        </nav>
+        <div className="fixed inset-0 z-50 nav:hidden">
+          <div className="absolute inset-0 bg-cocoa/45" onClick={() => setOpen(false)} aria-hidden />
+          <nav
+            aria-label="Menu"
+            className="drawer-left absolute inset-y-0 left-0 flex w-[min(330px,86%)] flex-col overflow-y-auto bg-ivory px-[18px] pt-[max(1.5rem,env(safe-area-inset-top))] pb-6"
+          >
+            <button type="button" autoFocus aria-label="Close menu" onClick={() => setOpen(false)} className={`${round} -ml-1`}>
+              <CloseIcon className="h-6 w-6" />
+            </button>
+            <div className="mt-2.5 mb-6 self-center">
+              <Logo size="lg" />
+            </div>
+            <ul className="flex flex-col">
+              {[CUSTOM, ...SHOP_NAV].map(({ id, label, href, icon: Icon }) => (
+                <li key={id}>
+                  <Link
+                    href={href}
+                    onClick={() => setOpen(false)}
+                    aria-current={active === id ? "page" : undefined}
+                    className={`flex items-center gap-[18px] px-[18px] py-4 text-[17px] font-medium tracking-[0.03em] text-cocoa uppercase ${
+                      active === id ? "mb-1.5 rounded-full bg-pink-2" : "border-b border-line"
+                    }`}
+                  >
+                    <Icon className="h-[30px] w-[30px] shrink-0" />
+                    <span className="flex-1">{label}</span>
+                    <ChevronRightIcon className="h-[18px] w-[18px]" />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+            <form action="/shop" role="search" className="mt-6 flex h-11 items-center gap-2 rounded-full border border-line bg-white px-4">
+              <SearchIcon className="h-5 w-5 text-cocoa-soft" />
+              <label htmlFor="menu-search" className="sr-only">
+                Search nail sets
+              </label>
+              <input
+                id="menu-search"
+                name="q"
+                type="search"
+                placeholder="Search sets…"
+                className="h-full min-w-0 flex-1 bg-transparent text-[16px] text-cocoa outline-none placeholder:text-cocoa-soft"
+              />
+            </form>
+          </nav>
+        </div>
       )}
-    </header>
-    </div>
+    </>
   );
 }

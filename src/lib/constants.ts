@@ -48,14 +48,26 @@ export function lineHasStyle(line: string, id: NailStyleId) {
 /** Price of one custom press-on set (USD). */
 export const DESIGN_PRICE = 28;
 
-/** Quick refinements offered after a design is generated. `open` = customer finishes the sentence. */
-export const REFINEMENTS: { emoji: string; label: string; text: string; open?: boolean }[] = [
-  { emoji: "🌸", label: "Add 3D Flowers", text: "add 3D flowers" },
-  { emoji: "🦪", label: "Add Pearls", text: "add pearls" },
-  { emoji: "💎", label: "Add Rhinestones", text: "add rhinestones" },
-  { emoji: "✨", label: "Add Glitter", text: "add glitter" },
-  { emoji: "🪙", label: "Add Foil (Gold/Silver)", text: "add gold foil accents" },
-  { emoji: "🎀", label: "Add Bow", text: "add a small bow" },
-  { emoji: "💝", label: "Add Charms", text: "add small charms" },
-  { emoji: "🎨", label: "Change Color", text: "change the color to ", open: true },
+/** Quick Add details: pick several (list on desktop, tiles on phones), then "Generate" sends them as one edit. */
+export type QuickAddCategory = "glitter" | "bow" | "flower" | "gem" | "charm";
+export const QUICK_ADD_CATEGORIES: { id: QuickAddCategory; label: string; emoji: string }[] = [
+  { id: "glitter", label: "Glitter", emoji: "✨" },
+  { id: "bow", label: "Bow", emoji: "🎀" },
+  { id: "flower", label: "3D Flower", emoji: "🌸" },
+  { id: "gem", label: "Gem", emoji: "💎" },
+  { id: "charm", label: "Charm", emoji: "⭐" },
+];
+export const QUICK_ADD: { id: string; label: string; emoji: string; text: string; category: QuickAddCategory; image: string }[] = [
+  { id: "glitter", label: "Glitter", emoji: "✨", text: "add glitter", category: "glitter", image: "/quick/glitter.jpg" },
+  { id: "bow", label: "Bow", emoji: "🎀", text: "add a small bow", category: "bow", image: "/quick/bow.jpg" },
+  { id: "3d-flower", label: "3D Flower", emoji: "🌸", text: "add 3D flowers", category: "flower", image: "/quick/flower.jpg" },
+  { id: "gem", label: "Gem", emoji: "💎", text: "add a large gem", category: "gem", image: "/quick/gem.jpg" },
+  { id: "pearl", label: "Pearl", emoji: "🤍", text: "add pearls", category: "gem", image: "/quick/pearl.jpg" },
+  { id: "charms", label: "Charms", emoji: "🔱", text: "add small gold charms", category: "charm", image: "/quick/charms.jpg" },
+  { id: "metal", label: "Metal Accent", emoji: "🪙", text: "add thin gold metal accents", category: "charm", image: "/quick/metal.jpg" },
+  { id: "rhinestone", label: "Rhinestone", emoji: "💠", text: "add rhinestones", category: "gem", image: "/quick/rhinestone.jpg" },
+  { id: "lace", label: "Lace", emoji: "🕸️", text: "add a white lace pattern", category: "charm", image: "/quick/lace.jpg" },
+  { id: "heart", label: "Heart", emoji: "💜", text: "add a small heart gem", category: "gem", image: "/quick/heart.jpg" },
+  { id: "butterfly", label: "Butterfly", emoji: "🦋", text: "add a small 3D butterfly", category: "flower", image: "/quick/butterfly.jpg" },
+  { id: "star", label: "Star", emoji: "⭐", text: "add a small gold star", category: "charm", image: "/quick/star.jpg" },
 ];

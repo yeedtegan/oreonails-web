@@ -15,6 +15,20 @@ export async function PUT(req: Request, { params }: Ctx) {
   return relay(res);
 }
 
+/** Change quantity / size / length of a design in the account cart: JSON { quantity, size, length }. */
+export async function PATCH(req: Request, { params }: Ctx) {
+  const { designId } = await params;
+  const session = await getSessionToken();
+  if (!session) return signIn();
+  const res = await accountApi(`/account/cart/${encodeURIComponent(designId)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: await req.text(),
+    session,
+  }).catch(unreachable);
+  return relay(res);
+}
+
 export async function DELETE(_req: Request, { params }: Ctx) {
   const { designId } = await params;
   const session = await getSessionToken();

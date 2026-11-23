@@ -1,17 +1,20 @@
 import type { Metadata } from "next";
-import { Cormorant_Garamond, Playfair_Display } from "next/font/google";
+import { Pacifico, Poppins } from "next/font/google";
 import "./globals.css";
 
-const playfair = Playfair_Display({
-  variable: "--font-playfair",
+/** the whole site: Poppins (light italic for display headings) */
+const poppins = Poppins({
+  variable: "--font-poppins",
   subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700"],
   style: ["normal", "italic"],
 });
 
-const cormorant = Cormorant_Garamond({
-  variable: "--font-cormorant",
+/** handwritten highlight word in headings */
+const pacifico = Pacifico({
+  variable: "--font-pacifico",
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+  weight: "400",
 });
 
 export const metadata: Metadata = {
@@ -22,8 +25,8 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${playfair.variable} ${cormorant.variable} h-full antialiased`}>
-      <body className="relative min-h-full font-body text-[1.0625rem]">{children}</body>
+    <html lang="en" className={`${poppins.variable} ${pacifico.variable} h-full antialiased`}>
+      <body className="relative min-h-full font-body text-[15px] leading-normal">{children}</body>
     </html>
   );
 }

@@ -154,7 +154,7 @@ export default function PhotoStage(p: Props) {
                     e.stopPropagation();
                     p.onRetry();
                   }}
-                  className="btn-gold inline-flex items-center gap-2 rounded-full px-5 py-1.5 font-serif text-base text-white"
+                  className="btn-gold btn-label inline-flex items-center gap-2 rounded-full px-5 py-1.5 text-[15px] text-white"
                 >
                   <SparkleIcon className="h-4 w-4" />
                   Try again
@@ -166,7 +166,7 @@ export default function PhotoStage(p: Props) {
                     e.stopPropagation();
                     p.openPicker();
                   }}
-                  className="btn-gold inline-flex items-center gap-2 rounded-full px-5 py-1.5 font-serif text-base text-white"
+                  className="btn-gold btn-label inline-flex items-center gap-2 rounded-full px-5 py-1.5 text-[15px] text-white"
                 >
                   <UploadIcon className="h-4 w-4" />
                   Choose another photo
@@ -215,7 +215,7 @@ export default function PhotoStage(p: Props) {
                 e.stopPropagation();
                 p.openPicker();
               }}
-              className="btn-gold mt-3 inline-flex items-center gap-2 rounded-full px-5 py-2 font-serif text-base text-white"
+              className="btn-gold btn-label mt-3 inline-flex items-center gap-2 rounded-full px-5 py-2 text-[15px] text-white"
             >
               <UploadIcon className="h-4 w-4" />
               Choose another photo

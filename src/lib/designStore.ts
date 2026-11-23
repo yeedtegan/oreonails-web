@@ -13,6 +13,8 @@ export type StoredVersion = {
   /** what was asked for this version (first prompt, or the chat edit) */
   instruction: string;
   favorite: boolean;
+  /** when it was generated (epoch ms); older saved designs don't have it */
+  createdAt?: number;
 };
 
 export type StoredMessage = {
@@ -37,11 +39,27 @@ export type StoredSession = {
 };
 
 export type StoredCartItem = {
-  /** the design version in the cart */
+  /** the design version in the cart, or "product-<productId>" for a Shop product */
   id: string;
+  /** absent = a custom design (carts saved before the Shop existed) */
+  kind?: "design" | "product";
+  /** design session (custom designs; "" for products) */
   sessionId: string;
-  blob: Blob;
+  /** the design image (custom designs) */
+  blob?: Blob;
+  /** Shop product */
+  productId?: string;
+  name?: string;
+  category?: string;
+  imageUrl?: string;
+  /** lengths the product is sold in (empty / absent = any) */
+  lengthOptions?: string[];
+  /** unit price */
   price: number;
+  /** absent = 1 */
+  quantity?: number;
+  size?: string | null;
+  length?: string | null;
   addedAt: number;
   /** already saved in the signed-in customer's account cart (false/absent = not uploaded yet, e.g. a guest item) */
   synced?: boolean;
@@ -148,3 +166,7 @@ export const setOpenSessionId = (id: string | undefined) => setMeta("openSession
 /** whose account cart the local cart mirrors (undefined = a guest cart) */
 export const getCartOwner = () => getMeta<string>("cartOwner");
 export const setCartOwner = (userId: string | undefined) => setMeta("cartOwner", userId);
+
+/** order notes typed in the cart (sent with the next checkout) */
+export const getCartNotes = () => getMeta<string>("cartNotes");
+export const setCartNotes = (notes: string) => setMeta("cartNotes", notes || undefined);

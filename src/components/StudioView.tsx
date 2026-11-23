@@ -34,7 +34,7 @@ function StepBadge({ n }: { n: number }) {
   return (
     <span
       aria-hidden
-      className="-mt-1.5 grid h-10 w-10 shrink-0 place-items-center rounded-full pb-px bg-[linear-gradient(160deg,#d8bc94,#b8956a)] font-serif text-[22px] font-semibold leading-none text-white [font-variant-numeric:lining-nums] shadow-[0_4px_10px_-4px_rgba(120,85,50,0.7)]"
+      className="-mt-1.5 grid h-10 w-10 shrink-0 place-items-center rounded-full pb-px bg-[linear-gradient(180deg,#8e5d40,#6e412a)] font-serif text-[22px] font-semibold leading-none text-white [font-variant-numeric:lining-nums] shadow-[0_4px_10px_-4px_rgba(120,85,50,0.7)]"
     >
       {n}
     </span>
@@ -58,15 +58,15 @@ export default function StudioView({ textareaRef, ...p }: Props) {
 
   return (
     <div className="relative z-10 mx-auto w-full max-w-[640px] px-4 pb-10 sm:px-6">
-      <header className="pt-1 text-center">
+      <header className="pt-6 text-center">
         <h1 className="font-serif text-[30px] font-semibold leading-tight text-cocoa sm:text-4xl">
-          Create Your Custom Nails
+          Create Your <span className="font-highlight font-normal text-gold-dark">Custom</span> Nails
         </h1>
         <p className="mt-1 text-[17px] text-cocoa">Upload your hand photo and describe the nail design you want</p>
       </header>
 
       {/* Step 1 — upload */}
-      <section className="glass-card mt-5 rounded-3xl p-4 sm:p-5" aria-labelledby="m-upload-title">
+      <section className="glass-card mt-5 rounded-[18px] p-4 sm:p-5" aria-labelledby="m-upload-title">
         <div className="flex items-start gap-3">
           <StepBadge n={1} />
           <div>
@@ -97,7 +97,7 @@ export default function StudioView({ textareaRef, ...p }: Props) {
           <button
             type="button"
             onClick={p.openPicker}
-            className="btn-brown flex flex-1 items-center justify-center gap-1.5 rounded-full px-2 py-2.5 pointer-fine:max-w-72 pointer-fine:hover:brightness-110 font-serif text-[17px] whitespace-nowrap text-white transition active:scale-[0.98]"
+            className="btn-brown flex flex-1 items-center justify-center gap-1.5 rounded-full px-2 py-2.5 pointer-fine:max-w-72 pointer-fine:hover:brightness-110 btn-label text-[16px] whitespace-nowrap text-white transition active:scale-[0.98]"
           >
             <UploadIcon className="h-5 w-5 shrink-0" />
             {p.file ? "Change Photo" : "Choose Photo"}
@@ -105,7 +105,7 @@ export default function StudioView({ textareaRef, ...p }: Props) {
           <button
             type="button"
             onClick={p.openCamera}
-            className="flex flex-1 items-center justify-center gap-2 rounded-full border-2 border-[#74482f] pointer-fine:hidden bg-white/70 px-4 py-2.5 font-serif text-lg whitespace-nowrap text-[#5a3523] transition active:scale-[0.98]"
+            className="flex flex-1 items-center justify-center gap-2 rounded-full border-2 border-[#74482f] pointer-fine:hidden bg-white/70 px-4 py-2.5 btn-label text-[16px] whitespace-nowrap text-[#5a3523] transition active:scale-[0.98]"
           >
             <CameraIcon className="h-5 w-5 shrink-0" />
             Take Photo
@@ -121,7 +121,7 @@ export default function StudioView({ textareaRef, ...p }: Props) {
       </section>
 
       {/* Step 2 — describe */}
-      <section className="glass-card mt-4 rounded-3xl p-4 sm:p-5" aria-labelledby="m-describe-title">
+      <section className="glass-card mt-4 rounded-[18px] p-4 sm:p-5" aria-labelledby="m-describe-title">
         <div className="flex items-start gap-3">
           <StepBadge n={2} />
           <div>
@@ -214,7 +214,7 @@ export default function StudioView({ textareaRef, ...p }: Props) {
       <button
         type="submit"
         disabled={p.loading}
-        className="btn-brown shimmer relative mx-auto mt-5 flex w-full max-w-md items-center justify-center gap-3 overflow-hidden rounded-full px-6 py-4 font-serif text-[22px] whitespace-nowrap text-white transition active:scale-[0.99] disabled:cursor-wait disabled:opacity-80"
+        className="btn-brown shimmer relative mx-auto mt-5 flex w-full max-w-md items-center justify-center gap-3 overflow-hidden rounded-full px-6 py-4 btn-label text-[19px] whitespace-nowrap text-white transition active:scale-[0.99] disabled:cursor-wait disabled:opacity-80"
       >
         {p.loading ? (
           <>

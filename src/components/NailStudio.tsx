@@ -26,7 +26,7 @@ function toStored(s: DesignSession): StoredSession {
     id: s.id,
     createdAt: s.createdAt,
     updatedAt: Date.now(),
-    versions: s.versions.map(({ id, blob, instruction, favorite }) => ({ id, blob, instruction, favorite })),
+    versions: s.versions.map(({ id, blob, instruction, favorite, createdAt }) => ({ id, blob, instruction, favorite, createdAt })),
     messages: s.messages,
   };
 }
@@ -301,7 +301,7 @@ export default function NailStudio() {
       showSession({
         id: uid(),
         createdAt: Date.now(),
-        versions: [{ id, blob, url: URL.createObjectURL(blob), instruction, favorite: false }],
+        versions: [{ id, blob, url: URL.createObjectURL(blob), instruction, favorite: false, createdAt: Date.now() }],
         messages: [greeting()],
       });
     } catch (err) {

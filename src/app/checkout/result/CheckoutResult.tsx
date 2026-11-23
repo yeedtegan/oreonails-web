@@ -73,7 +73,7 @@ export default function CheckoutResult() {
       {view.kind === "error" && (
         <>
           <p className="font-serif text-xl text-cocoa">{view.message}</p>
-          <Link href="/" className="btn-gold rounded-full px-6 py-2.5 font-serif text-white">
+          <Link href="/" className="btn-gold btn-label rounded-full px-6 py-2.5 text-white">
             Back to the studio
           </Link>
         </>
@@ -87,7 +87,7 @@ export default function CheckoutResult() {
             {view.order.items.length === 1 ? "set" : "sets"}. A confirmation will be sent to your email.
           </p>
           <p className="text-sm text-cocoa-soft">Order {view.order.id}</p>
-          <Link href="/" className="btn-gold rounded-full px-6 py-2.5 font-serif text-white">
+          <Link href="/" className="btn-gold btn-label rounded-full px-6 py-2.5 text-white">
             Design more nails
           </Link>
         </>
@@ -113,7 +113,7 @@ export default function CheckoutResult() {
         <>
           <h1 className="font-serif text-2xl text-cocoa">Payment didn&apos;t go through</h1>
           <p className="text-cocoa-soft">Your designs are still in your cart — please try checking out again.</p>
-          <Link href="/" className="btn-gold rounded-full px-6 py-2.5 font-serif text-white">
+          <Link href="/" className="btn-gold btn-label rounded-full px-6 py-2.5 text-white">
             Back to my cart
           </Link>
         </>
