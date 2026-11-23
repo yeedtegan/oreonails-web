@@ -152,14 +152,58 @@ export default function ResultView({ session, update, initialVersionId, onNewDes
   const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => () => clearTimeout(toastTimer.current), []);
 
-  // bring a new chat message into view (not on open: the design comes first)
-  const seenMessages = useRef(messages.length);
+  // the chat scrolls in its own box: start at the latest message, follow new ones
+  // (scrolling the box itself, never the page — on phones the page is fixed)
+  const seenMessages = useRef(-1);
   useEffect(() => {
-    if (messages.length > seenMessages.current) {
-      chatRef.current?.lastElementChild?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    const box = chatRef.current;
+    if (box && messages.length !== seenMessages.current) {
+      box.scrollTo({ top: box.scrollHeight, behavior: seenMessages.current < 0 ? "auto" : "smooth" });
     }
     seenMessages.current = messages.length;
   }, [messages]);
+
+  /**
+   * Phones (< 820px) — "app mode": the page doesn't scroll; the design stays on top and only the panel under it
+   * scrolls. While the on-screen keyboard is up the design is hidden (back when the keyboard closes).
+   */
+  const [keyboard, setKeyboard] = useState(false);
+  useEffect(() => {
+    const phone = window.matchMedia("(max-width: 819.98px)");
+    const touch = window.matchMedia("(pointer: coarse)");
+    const root = document.documentElement;
+    const vv = window.visualViewport;
+    const apply = () => {
+      const app = phone.matches;
+      document.body.classList.toggle("studio-app", app);
+      const h = vv ? vv.height : window.innerHeight;
+      root.style.setProperty("--vvh", `${Math.round(h)}px`);
+      const el = document.activeElement;
+      const typing = !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA") && touch.matches;
+      // iOS shrinks only the visual viewport; Android shrinks both — the focused text field covers that case
+      setKeyboard(app && (window.innerHeight - h > 140 || typing));
+      if (app && window.scrollY) window.scrollTo(0, 0); // iOS scrolls the page up to the field
+    };
+    const later = () => setTimeout(apply, 60);
+    const raf = requestAnimationFrame(apply);
+    vv?.addEventListener("resize", apply);
+    vv?.addEventListener("scroll", apply);
+    window.addEventListener("resize", apply);
+    phone.addEventListener("change", apply);
+    document.addEventListener("focusin", later);
+    document.addEventListener("focusout", later);
+    return () => {
+      cancelAnimationFrame(raf);
+      vv?.removeEventListener("resize", apply);
+      vv?.removeEventListener("scroll", apply);
+      window.removeEventListener("resize", apply);
+      phone.removeEventListener("change", apply);
+      document.removeEventListener("focusin", later);
+      document.removeEventListener("focusout", later);
+      document.body.classList.remove("studio-app");
+      root.style.removeProperty("--vvh");
+    };
+  }, []);
 
   const selectedIndex = Math.max(0, versions.findIndex((v) => v.id === selectedId));
   const selected = versions[selectedIndex];
@@ -291,8 +335,6 @@ export default function ResultView({ session, update, initialVersionId, onNewDes
   const show = (t: Tab) => (tab === t ? "flex" : t === "chat" && tab === "quick" ? "hidden nav:flex" : "hidden");
   const pane = "tab:rounded-[18px] tab:border tab:border-line tab:bg-ivory tab:px-[18px] tab:py-4 tab:soft-shadow";
   const overlayBtn = "grid h-[46px] w-[46px] place-items-center rounded-full bg-cocoa/70 text-white transition hover:bg-cocoa/85";
-  /** phones: room for the bar fixed at the bottom (chat input / Generate) */
-  const bottomBar = tab === "history" ? "pb-8" : "pb-28 tab:pb-[30px]";
 
   const generateButton = (extra = "") => (
     <button
@@ -309,18 +351,18 @@ export default function ResultView({ session, update, initialVersionId, onNewDes
   return (
     // phones: design, then tabs (Chat · Quick Add · History) with the chat input / Generate fixed at the bottom
     // tablet: design + history · chat/quick/history tabs — desktop (1180px+): + a Quick Add Details column
-    <div className="mx-auto w-full max-w-[97.5rem] px-[clamp(14px,3vw,40px)]">
+    <div className="mx-auto w-full max-w-[97.5rem] px-[clamp(14px,3vw,40px)] max-tab:flex max-tab:h-[calc(var(--vvh,100dvh)-77px)] max-tab:flex-col">
       <div
-        className={`grid grid-cols-1 gap-2 pt-2.5 tab:grid-cols-2 tab:gap-[18px] tab:pt-[18px] nav:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)_minmax(0,0.62fr)] ${bottomBar}`}
+        className="flex min-h-0 flex-1 flex-col gap-2 pt-2.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] tab:grid tab:grid-cols-2 tab:gap-[18px] tab:pt-[18px] tab:pb-[30px] nav:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)_minmax(0,0.62fr)]"
       >
         {/* ───────────── Design + history ───────────── */}
-        <section aria-label="Your nail design" className={`flex flex-col ${pane}`}>
+        <section aria-label="Your nail design" className={`flex flex-none flex-col ${pane} ${keyboard ? "max-tab:hidden" : ""}`}>
           <button type="button" onClick={onNewDesign} className="mb-3.5 hidden items-center gap-2.5 self-start text-[16px] tab:flex">
             <ArrowLeftIcon className="h-[22px] w-[22px]" />
             New Design
           </button>
 
-          <div className="relative aspect-[1.21] overflow-hidden rounded-[20px] bg-[#ddd]">
+          <div className="relative overflow-hidden rounded-[20px] bg-[#ddd] max-tab:h-[min(calc((100vw-28px)/1.21),42vh)] tab:aspect-[1.21]">
             {/* eslint-disable-next-line @next/next/no-img-element -- local blob */}
             <img src={selected.url} alt="" aria-hidden className="absolute inset-0 h-full w-full scale-110 object-cover opacity-60 blur-xl" />
             {/* eslint-disable-next-line @next/next/no-img-element -- local blob */}
@@ -421,8 +463,8 @@ export default function ResultView({ session, update, initialVersionId, onNewDes
         </section>
 
         {/* ───────────── Chat · Quick Add · History ───────────── */}
-        <section aria-label="Edit your design" className={`flex min-w-0 flex-col ${pane}`}>
-          <div role="tablist" aria-label="Design tools" className="mb-3 flex border-b border-line">
+        <section aria-label="Edit your design" className={`flex min-h-0 min-w-0 flex-1 flex-col ${pane}`}>
+          <div role="tablist" aria-label="Design tools" className="mb-1.5 flex flex-none border-b border-line tab:mb-3">
             {TABS.map(({ id, label, icon: Icon, className = "" }, k) => {
               return (
                 <button
@@ -446,7 +488,7 @@ export default function ResultView({ session, update, initialVersionId, onNewDes
           <div className={`min-h-0 flex-1 flex-col ${show("chat")}`}>
             <div
               ref={chatRef}
-              className="flex min-h-60 flex-1 flex-col gap-[18px] px-1 py-2.5 [&>*]:scroll-mb-28 tab:max-h-[560px] tab:min-h-80 tab:overflow-y-auto tab:[&>*]:scroll-mb-0"
+              className="flex min-h-0 flex-1 flex-col gap-[18px] overflow-y-auto overscroll-contain px-1 py-2.5 tab:max-h-[560px] tab:min-h-80"
               aria-live="polite"
               aria-label="Chat with the Oreo Nails assistant"
             >
@@ -485,9 +527,9 @@ export default function ResultView({ session, update, initialVersionId, onNewDes
             {/* phones: fixed to the bottom of the screen · tablet+: bottom of the panel */}
             <form
               onSubmit={onSend}
-              className="fixed inset-x-0 bottom-0 z-40 bg-[linear-gradient(transparent,var(--color-cream)_30%)] px-[clamp(14px,3vw,40px)] pt-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] tab:static tab:z-auto tab:bg-none tab:p-0"
+              className="flex-none"
             >
-              <div className="mt-3 flex items-center gap-2.5 rounded-full border border-line bg-white py-1.5 pr-2 pl-[18px] soft-shadow focus-within:border-brown">
+              <div className="mt-2 flex items-center gap-2.5 rounded-full border border-line bg-white py-1.5 pr-2 pl-[18px] soft-shadow focus-within:border-brown tab:mt-3">
                 <button type="button" onClick={onNewPhoto} aria-label="Use a different hand photo" title="Use a different hand photo" className="shrink-0">
                   <GalleryIcon className="h-[22px] w-[22px]" />
                 </button>
@@ -502,7 +544,7 @@ export default function ResultView({ session, update, initialVersionId, onNewDes
                   maxLength={MAX_PROMPT}
                   autoComplete="off"
                   placeholder="Type your request to edit the design…"
-                  className="min-h-11 min-w-0 flex-1 bg-transparent text-[16px] outline-none placeholder:text-cocoa-soft"
+                  className="min-h-11 min-w-0 flex-1 bg-transparent text-[16px] outline-none placeholder:text-cocoa-soft focus-visible:outline-none"
                 />
                 <button type="submit" disabled={!input.trim() || working} aria-label="Send" className="grid h-11 w-11 shrink-0 place-items-center rounded-full disabled:opacity-40">
                   {working ? <span className="h-5 w-5 animate-spin rounded-full border-2 border-line border-t-brown" /> : <SendIcon className="h-[22px] w-[22px]" />}
@@ -513,7 +555,7 @@ export default function ResultView({ session, update, initialVersionId, onNewDes
 
           {/* quick add tiles (below 1180px) */}
           <div className={`min-h-0 flex-1 flex-col nav:hidden ${tab === "quick" ? "flex" : "hidden"}`}>
-            <div className="flex gap-2 overflow-x-auto pb-2.5">
+            <div className="flex flex-none gap-2 overflow-x-auto pb-2.5">
               {[{ id: "all" as const, label: "All" }, ...QUICK_ADD_CATEGORIES].map((c) => (
                 <button
                   key={c.id}
@@ -526,7 +568,7 @@ export default function ResultView({ session, update, initialVersionId, onNewDes
                 </button>
               ))}
             </div>
-            <ul className="grid grid-cols-4 gap-[7px] min-[481px]:gap-2.5">
+            <ul className="grid min-h-0 flex-1 grid-cols-4 content-start gap-[7px] overflow-y-auto overscroll-contain min-[481px]:gap-2.5 tab:flex-none tab:overflow-visible">
               {QUICK_ADD.filter((q) => filter === "all" || q.category === filter).map((q) => {
                 const on = picked.includes(q.id);
                 return (
@@ -552,13 +594,13 @@ export default function ResultView({ session, update, initialVersionId, onNewDes
                 );
               })}
             </ul>
-            <div className="fixed inset-x-0 bottom-0 z-40 bg-[linear-gradient(transparent,var(--color-cream)_35%)] px-[clamp(14px,3vw,40px)] pt-3.5 pb-[max(0.75rem,env(safe-area-inset-bottom))] tab:sticky tab:inset-x-auto tab:px-0 tab:pb-1">
+            <div className="flex-none pt-2.5 tab:sticky tab:bottom-0 tab:bg-[linear-gradient(transparent,var(--color-cream)_35%)] tab:pt-3.5 tab:pb-1">
               {generateButton()}
             </div>
           </div>
 
           {/* history */}
-          <div className={`min-h-0 flex-1 flex-col ${show("history")}`}>
+          <div className={`min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain tab:overflow-visible ${show("history")}`}>
             <div className="flex items-center gap-2.5 py-1">
               <HistoryIcon className="h-[22px] w-[22px]" />
               <h2 className="text-[20px] font-semibold">Design History</h2>

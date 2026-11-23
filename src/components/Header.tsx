@@ -108,7 +108,7 @@ export default function Header({ active }: { active: NavId }) {
             <Logo />
           </div>
 
-          <nav className="hidden flex-1 flex-wrap items-center gap-1 nav:flex" aria-label="Main">
+          <nav className="hidden flex-1 flex-nowrap items-center justify-center gap-1 nav:flex xl:gap-2" aria-label="Main">
             {SHOP_NAV.map(({ id, label, href, badge }) => (
               <Link
                 key={id}

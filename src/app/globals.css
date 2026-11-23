@@ -177,3 +177,16 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .typing-dots span { animation: none; }
 }
+
+/* phones, custom-nail result screen ("app mode"): the page is fixed to the visible viewport — the design stays on top,
+   only the panel under it scrolls (ResultView toggles body.studio-app and sets --vvh) */
+@media (max-width: 819.98px) {
+  body.studio-app {
+    overflow: hidden;
+    height: var(--vvh, 100dvh);
+    overscroll-behavior: none;
+  }
+  body.studio-app footer {
+    display: none;
+  }
+}
