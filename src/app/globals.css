@@ -194,10 +194,16 @@ body {
     overflow: hidden;
     overscroll-behavior: none;
   }
+  /* pinned to the visible part of the screen: with the keyboard up iOS pans that area over the page, and the app
+     follows it (--vvt = how far it is panned) instead of sliding away */
   body.studio-app {
+    position: fixed;
+    inset-inline: 0;
+    top: 0;
     overflow: hidden;
     height: var(--vvh, 100dvh);
     overscroll-behavior: none;
+    transform: translateY(var(--vvt, 0px));
   }
   body.studio-app footer {
     display: none;

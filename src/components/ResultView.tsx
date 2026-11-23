@@ -185,6 +185,7 @@ export default function ResultView({ session, update, initialVersionId, onNewDes
       const h = vv ? vv.height : window.innerHeight;
       const px = `${Math.round(h)}px`;
       if (px !== lastH) root.style.setProperty("--vvh", (lastH = px)); // re-layout only when the height changes
+      root.style.setProperty("--vvt", `${app && vv ? Math.max(0, Math.round(vv.offsetTop)) : 0}px`);
       if (window.innerWidth !== fullWidth) {
         fullWidth = window.innerWidth;
         full = 0;
@@ -206,6 +207,26 @@ export default function ResultView({ session, update, initialVersionId, onNewDes
     const onScroll = () => {
       if (phone.matches && window.scrollY) onViewport();
     };
+    /* iOS: a swipe that no panel can take moves the whole page (with the keyboard up even past overflow:hidden).
+       Swipes are only let through inside a panel that can still scroll that way. */
+    let startY = 0;
+    const onTouchStart = (e: TouchEvent) => {
+      startY = e.touches[0]?.clientY ?? 0;
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      if (!phone.matches || e.touches.length > 1) return; // pinch zoom stays possible
+      const dy = (e.touches[0]?.clientY ?? 0) - startY; // > 0: finger moves down = scrolling up
+      for (let el = e.target as HTMLElement | null; el && el !== document.body; el = el.parentElement) {
+        const oy = getComputedStyle(el).overflowY;
+        if ((oy === "auto" || oy === "scroll") && el.scrollHeight > el.clientHeight + 1) {
+          const atTop = el.scrollTop <= 0;
+          const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 1;
+          if ((dy > 0 && atTop) || (dy < 0 && atBottom)) break; // would chain to the page
+          return;
+        }
+      }
+      if (e.cancelable) e.preventDefault();
+    };
     const timers: ReturnType<typeof setTimeout>[] = [];
     const later = (e: Event) => {
       if (e.type === "focusin") {
@@ -219,6 +240,8 @@ export default function ResultView({ session, update, initialVersionId, onNewDes
     vv?.addEventListener("scroll", onViewport);
     window.addEventListener("resize", onViewport);
     window.addEventListener("scroll", onScroll, { passive: true });
+    document.addEventListener("touchstart", onTouchStart, { passive: true });
+    document.addEventListener("touchmove", onTouchMove, { passive: false });
     phone.addEventListener("change", apply);
     document.addEventListener("focusin", later);
     document.addEventListener("focusout", later);
@@ -230,11 +253,14 @@ export default function ResultView({ session, update, initialVersionId, onNewDes
       vv?.removeEventListener("scroll", onViewport);
       window.removeEventListener("resize", onViewport);
       window.removeEventListener("scroll", onScroll);
+      document.removeEventListener("touchstart", onTouchStart);
+      document.removeEventListener("touchmove", onTouchMove);
       phone.removeEventListener("change", apply);
       document.removeEventListener("focusin", later);
       document.removeEventListener("focusout", later);
       document.body.classList.remove("studio-app");
       root.style.removeProperty("--vvh");
+      root.style.removeProperty("--vvt");
     };
   }, []);
 
