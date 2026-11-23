@@ -178,11 +178,13 @@ export default function ResultView({ session, update, initialVersionId, onNewDes
     let full = 0;
     let fullWidth = 0;
     let focusedAt = 0;
+    let lastH = "";
     const apply = () => {
       const app = phone.matches;
       document.body.classList.toggle("studio-app", app);
       const h = vv ? vv.height : window.innerHeight;
-      root.style.setProperty("--vvh", `${Math.round(h)}px`);
+      const px = `${Math.round(h)}px`;
+      if (px !== lastH) root.style.setProperty("--vvh", (lastH = px)); // re-layout only when the height changes
       if (window.innerWidth !== fullWidth) {
         fullWidth = window.innerWidth;
         full = 0;
@@ -196,6 +198,14 @@ export default function ResultView({ session, update, initialVersionId, onNewDes
       setKeyboard(app && (full - h > 140 || opening));
       if (app && window.scrollY) window.scrollTo(0, 0); // iOS scrolls the page up to the field
     };
+    // viewport events come in bursts while the keyboard slides: handle at most one per frame
+    let frame = 0;
+    const onViewport = () => {
+      if (!frame) frame = requestAnimationFrame(() => ((frame = 0), apply()));
+    };
+    const onScroll = () => {
+      if (phone.matches && window.scrollY) onViewport();
+    };
     const timers: ReturnType<typeof setTimeout>[] = [];
     const later = (e: Event) => {
       if (e.type === "focusin") {
@@ -205,18 +215,21 @@ export default function ResultView({ session, update, initialVersionId, onNewDes
       timers.push(setTimeout(apply, 60));
     };
     const raf = requestAnimationFrame(apply);
-    vv?.addEventListener("resize", apply);
-    vv?.addEventListener("scroll", apply);
-    window.addEventListener("resize", apply);
+    vv?.addEventListener("resize", onViewport);
+    vv?.addEventListener("scroll", onViewport);
+    window.addEventListener("resize", onViewport);
+    window.addEventListener("scroll", onScroll, { passive: true });
     phone.addEventListener("change", apply);
     document.addEventListener("focusin", later);
     document.addEventListener("focusout", later);
     return () => {
       cancelAnimationFrame(raf);
+      cancelAnimationFrame(frame);
       timers.forEach(clearTimeout);
-      vv?.removeEventListener("resize", apply);
-      vv?.removeEventListener("scroll", apply);
-      window.removeEventListener("resize", apply);
+      vv?.removeEventListener("resize", onViewport);
+      vv?.removeEventListener("scroll", onViewport);
+      window.removeEventListener("resize", onViewport);
+      window.removeEventListener("scroll", onScroll);
       phone.removeEventListener("change", apply);
       document.removeEventListener("focusin", later);
       document.removeEventListener("focusout", later);
@@ -392,7 +405,7 @@ export default function ResultView({ session, update, initialVersionId, onNewDes
 
           <div className="relative overflow-hidden rounded-[20px] bg-[#ddd] max-tab:h-[min(calc((100vw-28px)/1.21),42vh)] tab:aspect-[1.21]">
             {/* eslint-disable-next-line @next/next/no-img-element -- local blob */}
-            <img src={selected.url} alt="" aria-hidden className="absolute inset-0 h-full w-full scale-110 object-cover opacity-60 blur-xl" />
+            <img src={selected.url} alt="" aria-hidden className="absolute inset-0 h-full w-full scale-110 transform-gpu object-cover opacity-60 blur-xl will-change-transform" />
             {/* eslint-disable-next-line @next/next/no-img-element -- local blob */}
             <img
               src={selected.url}

@@ -364,26 +364,6 @@ function ProductCard({ product, favorite, onFavorite, onAdded }: { product: Prod
 export default function ShopView({ products, initial }: { products: Product[] | null; initial: ShopFilters }) {
   const [f, setF] = useState(initial);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  /** floating "Custom Nail" button: slides away while scrolling down (so it never sits on a product's cart button),
-      comes back when scrolling up or after the scrolling stops */
-  const [fabHidden, setFabHidden] = useState(false);
-  useEffect(() => {
-    let lastY = window.scrollY;
-    let idle: ReturnType<typeof setTimeout> | undefined;
-    const onScroll = () => {
-      const y = window.scrollY;
-      if (Math.abs(y - lastY) < 6) return;
-      setFabHidden(y > lastY && y > 120);
-      lastY = y;
-      clearTimeout(idle);
-      idle = setTimeout(() => setFabHidden(false), 900);
-    };
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => {
-      window.removeEventListener("scroll", onScroll);
-      clearTimeout(idle);
-    };
-  }, []);
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const { favs, toggle: toggleFav } = useFavorites();
@@ -516,9 +496,7 @@ export default function ShopView({ products, initial }: { products: Product[] | 
       <Link
         href="/"
         aria-label="Design your own custom nails"
-        className={`fab-in btn-brown fixed right-4 bottom-[calc(18px+env(safe-area-inset-bottom))] z-[35] inline-flex min-h-11 items-center gap-[7px] rounded-full pr-4 pl-[13px] text-[14px] font-medium text-white shadow-[0_8px_22px_rgba(58,33,23,.35)] transition-[translate,opacity] duration-300 motion-reduce:transition-none nav:hidden ${
-          fabHidden ? "pointer-events-none translate-y-[calc(100%+30px)] opacity-0" : ""
-        }`}
+        className={`fab-in btn-brown fixed right-4 bottom-[calc(18px+env(safe-area-inset-bottom))] z-[35] inline-flex min-h-11 items-center gap-[7px] rounded-full pr-4 pl-[13px] text-[14px] font-medium text-white shadow-[0_8px_22px_rgba(58,33,23,.35)] nav:hidden`}
       >
         <SparkleIcon className="h-[18px] w-[18px]" />
         Custom Nail

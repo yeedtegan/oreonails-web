@@ -189,6 +189,11 @@ body {
 /* phones, custom-nail result screen ("app mode"): the page is fixed to the visible viewport — the design stays on top,
    only the panel under it scrolls (ResultView toggles body.studio-app and sets --vvh) */
 @media (max-width: 819.98px) {
+  /* iOS scrolls the root, not the body: lock both so a swipe never drags the whole page (and snaps back) */
+  html:has(body.studio-app) {
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
   body.studio-app {
     overflow: hidden;
     height: var(--vvh, 100dvh);
