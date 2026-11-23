@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type ComponentType, type FormEvent, type S
 import { useCart } from "./CartContext";
 import {
   ArrowLeftIcon,
+  CameraIcon,
   CartIcon,
   ChatIcon,
   CheckIcon,
@@ -336,14 +337,21 @@ export default function ResultView({ session, update, initialVersionId, onNewDes
   const pane = "tab:rounded-[18px] tab:border tab:border-line tab:bg-ivory tab:px-[18px] tab:py-4 tab:soft-shadow";
   const overlayBtn = "grid h-[46px] w-[46px] place-items-center rounded-full bg-cocoa/70 text-white transition hover:bg-cocoa/85";
 
-  const generateButton = (extra = "") => (
+  /** compact: the small centred pill of the Quick Add tab · otherwise the full-width button of the desktop column */
+  const generateButton = (compact: boolean) => (
     <button
       type="button"
       onClick={generatePicked}
       disabled={working}
-      className={`btn-brown flex min-h-14 w-full items-center justify-center gap-2.5 rounded-full text-[19px] font-semibold text-white disabled:opacity-60 ${extra}`}
+      className={`btn-brown inline-flex items-center justify-center rounded-full font-medium text-white disabled:opacity-60 ${
+        compact ? "min-h-10 gap-2 px-[26px] text-[15px]" : "mt-4 min-h-11 w-full gap-2.5 px-[22px] text-[15px]"
+      }`}
     >
-      {working ? <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/40 border-t-white" /> : <SparkleIcon className="h-[22px] w-[22px]" />}
+      {working ? (
+        <span className="h-[18px] w-[18px] animate-spin rounded-full border-2 border-white/40 border-t-white" />
+      ) : (
+        <SparkleIcon className="h-[18px] w-[18px]" />
+      )}
       {working ? "Updating…" : "Generate"}
     </button>
   );
@@ -392,6 +400,16 @@ export default function ResultView({ session, update, initialVersionId, onNewDes
               {inCart ? "In Cart ✓" : "Add to Cart"}
               <i className="h-[22px] w-px bg-white/40" aria-hidden />
               <b className="font-medium">{price}</b>
+            </button>
+
+            <button
+              type="button"
+              onClick={onNewPhoto}
+              aria-label="Upload a different hand photo"
+              title="Upload a different hand photo"
+              className={`${overlayBtn} absolute top-3.5 left-3.5 tab:top-4 tab:left-4`}
+            >
+              <CameraIcon className="h-5 w-5" />
             </button>
 
             {/* share: top right · view larger: next to it on phones, bottom right from tablet up */}
@@ -464,7 +482,7 @@ export default function ResultView({ session, update, initialVersionId, onNewDes
 
         {/* ───────────── Chat · Quick Add · History ───────────── */}
         <section aria-label="Edit your design" className={`flex min-h-0 min-w-0 flex-1 flex-col ${pane}`}>
-          <div role="tablist" aria-label="Design tools" className="mb-1.5 flex flex-none border-b border-line tab:mb-3">
+          <div role="tablist" aria-label="Design tools" className="mb-1 flex flex-none border-b border-line tab:mb-3">
             {TABS.map(({ id, label, icon: Icon, className = "" }, k) => {
               return (
                 <button
@@ -473,11 +491,11 @@ export default function ResultView({ session, update, initialVersionId, onNewDes
                   type="button"
                   aria-selected={tab === id}
                   onClick={() => setTab(id)}
-                  className={`-mb-px flex flex-1 items-center justify-center gap-1.5 border-b-[3px] px-1 py-3 text-[14.5px] whitespace-nowrap tab:flex-none tab:gap-2.5 tab:px-5 tab:text-[16px] ${
+                  className={`-mb-px flex flex-1 items-center justify-center gap-[5px] border-b-2 px-1 py-[7px] text-[13.5px] whitespace-nowrap tab:flex-none tab:gap-2.5 tab:border-b-[3px] tab:px-5 tab:py-3 tab:text-[16px] ${
                     tab === id ? "border-brown" : id === "chat" && tab === "quick" ? "border-transparent nav:border-brown" : "border-transparent"
                   } ${k < TABS.length - 1 ? "max-tab:border-r max-tab:border-r-line" : ""} ${className}`}
                 >
-                  <Icon className="h-[22px] w-[22px]" />
+                  <Icon className="h-[17px] w-[17px] tab:h-[22px] tab:w-[22px]" />
                   {label}
                 </button>
               );
@@ -544,7 +562,7 @@ export default function ResultView({ session, update, initialVersionId, onNewDes
                   maxLength={MAX_PROMPT}
                   autoComplete="off"
                   placeholder="Type your request to edit the design…"
-                  className="min-h-11 min-w-0 flex-1 bg-transparent text-[16px] outline-none placeholder:text-cocoa-soft focus-visible:outline-none"
+                  className="min-h-11 min-w-0 flex-1 bg-transparent text-[16px] outline-none placeholder:text-cocoa-soft"
                 />
                 <button type="submit" disabled={!input.trim() || working} aria-label="Send" className="grid h-11 w-11 shrink-0 place-items-center rounded-full disabled:opacity-40">
                   {working ? <span className="h-5 w-5 animate-spin rounded-full border-2 border-line border-t-brown" /> : <SendIcon className="h-[22px] w-[22px]" />}
@@ -555,14 +573,14 @@ export default function ResultView({ session, update, initialVersionId, onNewDes
 
           {/* quick add tiles (below 1180px) */}
           <div className={`min-h-0 flex-1 flex-col nav:hidden ${tab === "quick" ? "flex" : "hidden"}`}>
-            <div className="flex flex-none gap-2 overflow-x-auto pb-2.5">
+            <div className="flex flex-none gap-1.5 overflow-x-auto pt-0.5 pb-1.5 tab:gap-2 tab:pt-0 tab:pb-2.5">
               {[{ id: "all" as const, label: "All" }, ...QUICK_ADD_CATEGORIES].map((c) => (
                 <button
                   key={c.id}
                   type="button"
                   aria-pressed={filter === c.id}
                   onClick={() => setFilter(c.id)}
-                  className={`shrink-0 rounded-full border px-4 py-[7px] whitespace-nowrap ${filter === c.id ? "border-brown bg-brown text-white" : "border-line bg-white"}`}
+                  className={`min-h-[30px] shrink-0 rounded-full border px-3 py-[3px] text-[13px] whitespace-nowrap tab:min-h-0 tab:px-4 tab:py-[7px] tab:text-[15px] ${filter === c.id ? "border-brown bg-brown text-white" : "border-line bg-white"}`}
                 >
                   {c.label}
                 </button>
@@ -594,23 +612,23 @@ export default function ResultView({ session, update, initialVersionId, onNewDes
                 );
               })}
             </ul>
-            <div className="flex-none pt-2.5 tab:sticky tab:bottom-0 tab:bg-[linear-gradient(transparent,var(--color-cream)_35%)] tab:pt-3.5 tab:pb-1">
-              {generateButton()}
+            <div className="flex-none pt-2.5 pb-1 text-center tab:sticky tab:bottom-0 tab:bg-[linear-gradient(transparent,var(--color-cream)_40%)]">
+              {generateButton(true)}
             </div>
           </div>
 
           {/* history */}
           <div className={`min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain tab:overflow-visible ${show("history")}`}>
-            <div className="flex items-center gap-2.5 py-1">
+            <div className="flex items-center gap-2.5 pb-0.5 tab:py-1">
               <HistoryIcon className="h-[22px] w-[22px]" />
-              <h2 className="text-[20px] font-semibold">Design History</h2>
+              <h2 className="text-[16px] font-semibold tab:text-[20px]">Design History</h2>
               <span className="ml-auto text-[14px] text-cocoa-soft">
                 {versions.length} {versions.length === 1 ? "Design" : "Designs"}
               </span>
             </div>
             {historyGroups.map((g) => (
               <div key={g.label}>
-                <h3 className="mt-3.5 mb-2.5 inline-block rounded-full bg-pink px-3.5 py-[3px] text-[14px] font-medium">{g.label}</h3>
+                <h3 className="mt-2 mb-1.5 inline-block rounded-full bg-pink px-3.5 py-[3px] text-[14px] font-medium tab:mt-3.5 tab:mb-2.5">{g.label}</h3>
                 <ul className="grid grid-cols-4 gap-[7px] min-[481px]:gap-2.5">
                   {g.items.map(({ v, n }) => {
                     const on = v.id === selected.id;
@@ -671,7 +689,7 @@ export default function ResultView({ session, update, initialVersionId, onNewDes
               );
             })}
           </ul>
-          {generateButton("mt-4")}
+          {generateButton(false)}
         </section>
       </div>
 

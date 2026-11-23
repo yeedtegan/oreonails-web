@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useCart } from "./CartContext";
-import { ArrowRightIcon, BagIcon, CloseIcon, FilterIcon, HeartIcon, SearchIcon } from "./icons";
+import { ArrowRightIcon, BagIcon, CloseIcon, FilterIcon, HeartIcon, SearchIcon, SparkleIcon } from "./icons";
 import { money } from "@/lib/pricing";
 import {
   CATEGORIES,
@@ -61,17 +61,42 @@ function useFavorites() {
   return { favs, toggle };
 }
 
-type Slide = { kicker: string; title: string; text: string; href: string; cta: string };
+/** what fills the right side of a slide: a photo, or a few nail sets from the shop */
+type SlideArt = { photo: string; focus?: string } | { sets: Product[] };
+type Slide = { kicker: string; title: string; text: string; href: string; cta: string; art: SlideArt };
 
-/** banner slides; the promo slide follows the store's "x sets, y free" rules */
-function useSlides(): Slide[] {
+const HOLIDAY_PHOTO = "/shop/holiday-glam.jpg";
+
+/** banner slides — each with its own picture; the promo slide follows the store's "x sets, y free" rules */
+function useSlides(products: Product[] | null): Slide[] {
   const { pricing } = useCart();
   const tiers = pricing?.tiers ?? [];
   const first = tiers[0];
   const last = tiers.at(-1);
+  const all = products ?? [];
+  const best = all.filter((p) => p.bestSeller).slice(0, 3);
+  // the bundle slide shows other sets than the best-sellers one when there are enough
+  const others = all.filter((p) => !best.includes(p));
+  const bundle = (others.length >= 3 ? others : all).slice(0, 3);
+  const sets = (list: Product[]): SlideArt => (list.length ? { sets: list } : { photo: HOLIDAY_PHOTO });
+
   return [
-    { kicker: "New collection", title: "Holiday Glam", text: "Festive nail sets for a brighter season.", href: "/shop?collection=holiday", cta: "Shop Now" },
-    { kicker: "Best sellers", title: "Winter Charm", text: "Snowflakes, bows and gold foil, hand-painted.", href: "/shop?best=1", cta: "Shop Now" },
+    {
+      kicker: "New collection",
+      title: "Holiday Glam",
+      text: "Festive nail sets for a brighter season.",
+      href: "/shop?collection=holiday",
+      cta: "Shop Now",
+      art: { photo: HOLIDAY_PHOTO, focus: "45% center" }, // phones crop the sides: keep the nails
+    },
+    {
+      kicker: "Best sellers",
+      title: "Best Sellers",
+      text: "Our most-loved sets, hand-painted and ready to wear.",
+      href: "/shop?best=1",
+      cta: "Shop Now",
+      art: sets(best),
+    },
     ...(first && last
       ? [
           {
@@ -80,15 +105,58 @@ function useSlides(): Slide[] {
             text: `Mix any sets — up to ${last.free} free with ${last.sets}.`,
             href: "/shop",
             cta: "Shop Now",
+            art: sets(bundle),
           },
         ]
       : []),
-    { kicker: "Custom nail", title: "Design your own", text: "Describe it, try it on, we paint it by hand.", href: "/", cta: "Start Designing" },
+    {
+      kicker: "Custom nail",
+      title: "Design your own",
+      text: "Describe it, try it on, we paint it by hand.",
+      href: "/",
+      cta: "Start Designing",
+      art: { photo: "/shop/custom-hand.jpg", focus: "50% 22%" }, // keep the nails in the frame
+    },
   ];
 }
 
-function Hero() {
-  const slides = useSlides();
+const TILT = ["-rotate-3", "rotate-2", "-rotate-1"];
+
+/** the picture of one slide (all are stacked; the active one fades in) */
+function SlideArtLayer({ art, active }: { art: SlideArt; active: boolean }) {
+  const fade = `absolute inset-0 transition-opacity duration-700 ease-out motion-reduce:transition-none ${active ? "opacity-100" : "opacity-0"}`;
+  if ("photo" in art) {
+    return (
+      <div aria-hidden className={fade}>
+        {/* eslint-disable-next-line @next/next/no-img-element -- static banner photo */}
+        <img
+          src={art.photo}
+          alt=""
+          style={{ objectPosition: art.focus ?? "right center" }}
+          className="absolute inset-y-0 right-0 h-full w-[72%] object-cover [mask-image:linear-gradient(to_right,transparent,black_35%)] tab:w-[58%]"
+        />
+      </div>
+    );
+  }
+  return (
+    <div aria-hidden className={fade}>
+      <div className="absolute inset-y-0 right-3 flex w-[44%] flex-col items-end justify-center gap-2 tab:right-[4%] tab:w-[58%] tab:flex-row tab:items-center tab:justify-end tab:gap-4">
+        {art.sets.map((p, k) => (
+          <div
+            key={p.id}
+            className={`w-full max-w-[240px] rounded-2xl border border-line bg-ivory p-1.5 soft-shadow tab:w-1/3 tab:p-2 ${TILT[k % TILT.length]} ${k > 1 ? "max-tab:hidden" : ""}`}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element -- store image through our cached route */}
+            <img src={productImage(p)} alt="" className="aspect-[2.5/1] w-full rounded-xl object-cover mix-blend-multiply" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Hero({ products }: { products: Product[] | null }) {
+  const slides = useSlides(products);
   const [i, setI] = useState(0);
   const [auto, setAuto] = useState(true);
   useEffect(() => {
@@ -96,14 +164,14 @@ function Hero() {
     const t = setInterval(() => setI((n) => (n + 1) % slides.length), 5000);
     return () => clearInterval(t);
   }, [auto, slides.length]);
-  const s = slides[i % slides.length];
+  const current = i % slides.length;
+  const s = slides[current];
 
   return (
-    <section
-      aria-roledescription="carousel"
-      aria-label="Featured"
-      className="relative my-[18px] min-h-[200px] overflow-hidden rounded-3xl bg-[#f6e3da] bg-[url(/shop/holiday-glam.jpg)] bg-[length:auto_100%] bg-[position:70%_center] bg-no-repeat tab:min-h-[220px] tab:bg-[position:right_center]"
-    >
+    <section aria-roledescription="carousel" aria-label="Featured" className="relative my-[18px] min-h-[200px] overflow-hidden rounded-3xl bg-[#f6e3da] tab:min-h-[220px]">
+      {slides.map((x, k) => (
+        <SlideArtLayer key={x.kicker} art={x.art} active={k === current} />
+      ))}
       <div
         aria-hidden
         className="absolute inset-0 bg-[linear-gradient(90deg,#f8ebe4_30%,rgba(248,235,228,.75)_60%,rgba(248,235,228,.2))] tab:bg-[linear-gradient(90deg,#f8ebe4_40%,rgba(248,235,228,.6)_58%,transparent_72%)]"
@@ -111,7 +179,7 @@ function Hero() {
       <div className="relative px-[22px] py-[26px] tab:px-[clamp(20px,15vw,240px)] tab:py-[34px]" aria-live="polite">
         <p className="text-[12px] font-medium tracking-[0.3em] uppercase">{s.kicker}</p>
         <h1 className="display-title my-1.5 text-[clamp(34px,4.6vw,54px)] leading-[1.1]">{s.title}</h1>
-        <p className="mb-4 text-[16px]">{s.text}</p>
+        <p className="mb-4 max-w-[16rem] text-[16px] tab:max-w-none">{s.text}</p>
         <Link href={s.href} className="btn-brown btn-label inline-flex min-h-11 items-center gap-2.5 rounded-full px-[22px] text-white">
           {s.cta}
           <ArrowRightIcon className="h-5 w-5" />
@@ -121,15 +189,15 @@ function Hero() {
         <div className="absolute bottom-3.5 left-[52%] flex gap-2">
           {slides.map((x, k) => (
             <button
-              key={x.title}
+              key={x.kicker}
               type="button"
               aria-label={`Slide ${k + 1}: ${x.title}`}
-              aria-current={k === i % slides.length}
+              aria-current={k === current}
               onClick={() => {
                 setI(k);
                 setAuto(false);
               }}
-              className={`h-3 w-3 rounded-full border-[1.5px] border-cocoa ${k === i % slides.length ? "bg-cocoa" : ""}`}
+              className={`h-3 w-3 rounded-full border-[1.5px] border-cocoa ${k === current ? "bg-cocoa" : ""}`}
             />
           ))}
         </div>
@@ -296,6 +364,26 @@ function ProductCard({ product, favorite, onFavorite, onAdded }: { product: Prod
 export default function ShopView({ products, initial }: { products: Product[] | null; initial: ShopFilters }) {
   const [f, setF] = useState(initial);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  /** floating "Custom Nail" button: slides away while scrolling down (so it never sits on a product's cart button),
+      comes back when scrolling up or after the scrolling stops */
+  const [fabHidden, setFabHidden] = useState(false);
+  useEffect(() => {
+    let lastY = window.scrollY;
+    let idle: ReturnType<typeof setTimeout> | undefined;
+    const onScroll = () => {
+      const y = window.scrollY;
+      if (Math.abs(y - lastY) < 6) return;
+      setFabHidden(y > lastY && y > 120);
+      lastY = y;
+      clearTimeout(idle);
+      idle = setTimeout(() => setFabHidden(false), 900);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      clearTimeout(idle);
+    };
+  }, []);
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const { favs, toggle: toggleFav } = useFavorites();
@@ -336,7 +424,7 @@ export default function ShopView({ products, initial }: { products: Product[] | 
 
   return (
     <div className="mx-auto w-full max-w-[97.5rem] px-[clamp(14px,3vw,40px)]">
-      <Hero />
+      <Hero products={products} />
 
       <div className="grid grid-cols-1 gap-9 pb-[50px] tab:grid-cols-[290px_minmax(0,1fr)]">
         <aside
@@ -423,6 +511,18 @@ export default function ShopView({ products, initial }: { products: Product[] | 
           )}
         </section>
       </div>
+
+      {/* below 1180px the header has no "Custom Nail" button: a floating shortcut instead */}
+      <Link
+        href="/"
+        aria-label="Design your own custom nails"
+        className={`fab-in btn-brown fixed right-4 bottom-[calc(18px+env(safe-area-inset-bottom))] z-[35] inline-flex min-h-11 items-center gap-[7px] rounded-full pr-4 pl-[13px] text-[14px] font-medium text-white shadow-[0_8px_22px_rgba(58,33,23,.35)] transition-[translate,opacity] duration-300 motion-reduce:transition-none nav:hidden ${
+          fabHidden ? "pointer-events-none translate-y-[calc(100%+30px)] opacity-0" : ""
+        }`}
+      >
+        <SparkleIcon className="h-[18px] w-[18px]" />
+        Custom Nail
+      </Link>
 
       {toast && (
         <div role="status" className="fixed bottom-6 left-1/2 z-[70] -translate-x-1/2 rounded-full bg-cocoa px-[22px] py-3 text-[14px] whitespace-nowrap text-white">

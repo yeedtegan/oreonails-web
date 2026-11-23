@@ -154,9 +154,17 @@ body {
   transform: rotate(45deg) translate(-1px, -1px);
 }
 
-:focus-visible {
-  outline: 2px solid var(--color-brown);
-  outline-offset: 2px;
+/* keyboard focus ring — in the base layer so utilities can override it. Text fields don't get it:
+   each sits in a box that shows focus itself (border colour) */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--color-brown);
+    outline-offset: 2px;
+  }
+  input:not([type="checkbox"], [type="radio"]):focus-visible,
+  textarea:focus-visible {
+    outline: none;
+  }
 }
 
 /* typing dots */
@@ -189,4 +197,13 @@ body {
   body.studio-app footer {
     display: none;
   }
+}
+
+/* floating "Custom Nail" shortcut on the Shop (phones / tablets) */
+@keyframes fab-in {
+  from { opacity: 0; transform: translateY(16px) scale(0.9); }
+}
+.fab-in { animation: fab-in 0.35s ease both; }
+@media (prefers-reduced-motion: reduce) {
+  .fab-in { animation: none; }
 }
