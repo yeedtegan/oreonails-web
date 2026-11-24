@@ -18,7 +18,7 @@ import {
   type StoredSession,
 } from "@/lib/designStore";
 import { checkHandPhoto, warmUpHandDetector, type HandCheck } from "@/lib/handDetector";
-import { ACCEPTED_TYPES, MAX_FILE_BYTES, MAX_PROMPT, lineHasStyle, styleLine } from "@/lib/constants";
+import { ACCEPTED_TYPES, MAX_FILE_BYTES, MAX_PROMPT, QUICK_ADD } from "@/lib/constants";
 import { uid } from "@/lib/uid";
 
 function toStored(s: DesignSession): StoredSession {
@@ -53,7 +53,8 @@ export default function NailStudio() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const [styles, setStyles] = useState<NailStyleId[]>([]);
-  const [showMore, setShowMore] = useState(false);
+  // Quick Add details picked on the upload screen (added to the description when generating)
+  const [quick, setQuick] = useState<string[]>([]);
   const [prompt, setPrompt] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -222,29 +223,9 @@ export default function NailStudio() {
     pickFile(e.dataTransfer.files?.[0]);
   }
 
-  function toggleStyle(id: NailStyleId) {
-    // Multi-select: each picked style adds its own "- …" line to the description;
-    // un-picking it removes every line that still contains the style's prompt,
-    // even if the customer deleted the "- " (anything else they typed stays).
-    const selected = styles.includes(id);
-    setStyles(selected ? styles.filter((s) => s !== id) : [...styles, id]);
-    setPrompt((text) => {
-      const line = styleLine(id);
-      const lines = text.split("\n");
-      if (selected) {
-        return lines
-          .filter((l) => !lineHasStyle(l, id))
-          .join("\n")
-          .replace(/\s+$/, "");
-      }
-      // already in the description (e.g. typed back by hand) → don't add it twice
-      if (lines.some((l) => lineHasStyle(l, id))) return text;
-      const body = text.replace(/\s+$/, "");
-      return (body ? `${body}\n${line}` : line).slice(0, MAX_PROMPT);
-    });
+  function toggleQuick(id: string) {
+    setQuick((q) => (q.includes(id) ? q.filter((x) => x !== id) : [...q, id]));
   }
-
-
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -260,8 +241,10 @@ export default function NailStudio() {
       setError(handCheck.message);
       return;
     }
-    if (!prompt.trim() && styles.length === 0) {
-      setError("Describe your design or pick at least one nail style.");
+    const details = QUICK_ADD.filter((q) => quick.includes(q.id)).map((q) => q.text);
+    const request = [prompt.trim(), details.join(", ")].filter(Boolean).join(". ").slice(0, MAX_PROMPT);
+    if (!request && styles.length === 0) {
+      setError("Describe your design or pick something from Quick Add.");
       focusPrompt();
       return;
     }
@@ -271,7 +254,7 @@ export default function NailStudio() {
     const token = photoToken.current;
     let jobId: string;
     try {
-      jobId = await startDesign({ mode: "create", image: file, prompt, styles });
+      jobId = await startDesign({ mode: "create", image: file, prompt: request, styles });
     } catch (err) {
       if (photoToken.current === token) {
         showGenError(err);
@@ -279,7 +262,7 @@ export default function NailStudio() {
       }
       return;
     }
-    const pending: PendingCreate = { jobId, photo: file, photoName: file.name, prompt, styles, startedAt: Date.now() };
+    const pending: PendingCreate = { jobId, photo: file, photoName: file.name, prompt: request, styles, startedAt: Date.now() };
     setPendingCreate(pending); // lets the studio pick the job up again after leaving the page
     await finishCreate(pending, token);
   }
@@ -387,10 +370,8 @@ export default function NailStudio() {
           prompt={prompt}
           setPrompt={setPrompt}
           textareaRef={textareaRef}
-          styles={styles}
-          toggleStyle={toggleStyle}
-          showMore={showMore}
-          setShowMore={setShowMore}
+          quick={quick}
+          toggleQuick={toggleQuick}
           error={error}
           loading={loading}
           handCheck={handCheck}
