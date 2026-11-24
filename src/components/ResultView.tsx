@@ -288,10 +288,10 @@ export default function ResultView({ session, update, initialVersionId, onNewDes
 
   const togglePick = (id: string) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
 
-  async function edit(text: string, baseId: string) {
+  async function edit(text: string, baseId: string, lengthen = false) {
     const base = versions.find((v) => v.id === baseId) ?? selected;
     const pendingId = uid();
-    const resend = { text, baseId: base.id };
+    const resend = { text, baseId: base.id, ...(lengthen && { lengthen }) };
     inFlight.add(pendingId); // until the job id is saved: a reopen must not call it interrupted
     // keeps `retry` so the edit can be resent if it fails or is interrupted
     const pending: Message = {
@@ -305,7 +305,7 @@ export default function ResultView({ session, update, initialVersionId, onNewDes
     update((s) => ({ ...s, messages: [...s.messages, pending] }));
     let jobId: string;
     try {
-      jobId = await startDesign({ mode: "edit", image: base.blob, prompt: text });
+      jobId = await startDesign({ mode: "edit", image: base.blob, prompt: text, lengthen });
     } catch (err) {
       update((s) => ({
         ...s,
@@ -334,16 +334,16 @@ export default function ResultView({ session, update, initialVersionId, onNewDes
   function retry(msg: Message) {
     if (!msg.retry || working) return;
     update((s) => ({ ...s, messages: s.messages.filter((x) => x.id !== msg.id) }));
-    edit(msg.retry.text, msg.retry.baseId);
+    edit(msg.retry.text, msg.retry.baseId, msg.retry.lengthen);
   }
 
   function toggleFavorite(id: string) {
     update((s) => ({ ...s, versions: s.versions.map((v) => (v.id === id ? { ...v, favorite: !v.favorite } : v)) }));
   }
 
-  function send(text: string) {
+  function send(text: string, lengthen = false) {
     update((s) => ({ ...s, messages: [...s.messages, { id: uid(), role: "user", time: Date.now(), text }] }));
-    edit(text, selected.id);
+    edit(text, selected.id, lengthen);
   }
 
   /** the picked Quick Add details as one edit */
@@ -352,7 +352,7 @@ export default function ResultView({ session, update, initialVersionId, onNewDes
     if (!picked.length) return showToast("Pick at least one detail");
     const parts = QUICK_ADD.filter((q) => picked.includes(q.id)).map((q) => q.text);
     const text = parts.join(", ");
-    send(text.charAt(0).toUpperCase() + text.slice(1));
+    send(text.charAt(0).toUpperCase() + text.slice(1), true); // Quick Add: longer nails, room for the details
     setPicked([]);
     setTab("chat");
   }

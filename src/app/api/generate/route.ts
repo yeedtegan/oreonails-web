@@ -21,15 +21,23 @@ function buildPrompt(userPrompt: string, styles: string[]) {
     .join(" ");
 }
 
-/** Refining an existing design: change only what the customer asked for. */
-function buildEditPrompt(instruction: string) {
+/**
+ * Refining an existing design: change only what the customer asked for.
+ * `lengthen` (Quick Add): nails 6–10 mm past the fingertips, so the added details have room
+ * instead of squeezing them onto the current short nails.
+ */
+function buildEditPrompt(instruction: string, lengthen: boolean) {
   return [
     "This photo shows a hand with a manicure. Edit ONLY the nails according to this request:",
     `${instruction}.`,
+    lengthen &&
+      "Also set the nail length: on every nail the free edge must extend 6–10 mm (about 1/4 to 3/8 inch) past the fingertip, like medium-length press-on / acrylic extensions — lengthen nails that are shorter than that and shorten nails that are longer, keeping all nails a natural, consistent length for each finger. Keep the same nail shape and design, and spread the added details across the full length of each nail so they are not crowded.",
     "Keep the rest of the current nail design as it is unless the request changes it.",
     "Keep the hand, skin tone, pose, framing, lighting and background exactly the same.",
     "Photorealistic, high detail, salon quality.",
-  ].join(" ");
+  ]
+    .filter(Boolean)
+    .join(" ");
 }
 
 export async function POST(req: Request) {
@@ -38,6 +46,7 @@ export async function POST(req: Request) {
   const prompt = String(form.get("prompt") ?? "").trim();
   const styles = form.getAll("styles").map(String);
   const mode = form.get("mode") === "edit" ? "edit" : "create";
+  const lengthen = form.get("lengthen") === "1";
 
   if (!(image instanceof File)) {
     return NextResponse.json({ error: "A hand photo is required." }, { status: 400 });
@@ -60,7 +69,7 @@ export async function POST(req: Request) {
 
   // generation takes minutes: oreonails-api runs it as a background job and the browser polls
   // GET /api/generate/<jobId> (short requests — fine on Workers, and leaving the page doesn't lose it)
-  const finalPrompt = mode === "edit" ? buildEditPrompt(prompt) : buildPrompt(prompt, styles);
+  const finalPrompt = mode === "edit" ? buildEditPrompt(prompt, lengthen) : buildPrompt(prompt, styles);
   const upstreamForm = new FormData();
   upstreamForm.append("image", image, image.name || "hand.png");
   upstreamForm.append("prompt", finalPrompt);

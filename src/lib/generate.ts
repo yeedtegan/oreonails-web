@@ -12,8 +12,8 @@ export class GenerationError extends Error {
 export type DesignRequest =
   /** first design, from the customer's hand photo */
   | { mode: "create"; image: Blob; prompt: string; styles: string[] }
-  /** refine an existing design with a chat instruction */
-  | { mode: "edit"; image: Blob; prompt: string };
+  /** refine an existing design with a chat instruction · `lengthen`: Quick Add — make the nails longer to fit the details */
+  | { mode: "edit"; image: Blob; prompt: string; lengthen?: boolean };
 
 const LOST = "Connection lost while creating your design. Please try again.";
 const UNAVAILABLE = "Our design studio is unavailable right now. Please try again in a few minutes.";
@@ -33,6 +33,7 @@ export async function startDesign(req: DesignRequest): Promise<string> {
   body.append("image", req.image, req.image instanceof File ? req.image.name : "design.png");
   body.append("prompt", req.prompt.trim());
   if (req.mode === "create") req.styles.forEach((s) => body.append("styles", s));
+  if (req.mode === "edit" && req.lengthen) body.append("lengthen", "1");
 
   let res: Response;
   try {

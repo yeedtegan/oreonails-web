@@ -2,8 +2,9 @@
 
 /**
  * Browser-side persistence (IndexedDB) for generated design sessions and the cart.
- * Images are kept as Blobs, so a session can be reopened after a reload — including
- * every version and the edit chat. Every call fails soft: if IndexedDB is unavailable
+ * Images are kept, so a session can be reopened after a reload — including every version and the edit chat.
+ * They are stored as raw bytes, not Blobs: iOS Safari loses the data of Blobs kept in IndexedDB (an image read
+ * back shows as broken), so every Blob is turned into bytes on save and back into a fresh Blob on read. Every call fails soft: if IndexedDB is unavailable
  * (private mode, blocked storage) the app keeps working in memory only.
  */
 
@@ -25,7 +26,7 @@ export type StoredMessage = {
   time: number;
   status?: "pending" | "error";
   /** the edit to resend (failed edits, and edits still running) */
-  retry?: { text: string; baseId: string };
+  retry?: { text: string; baseId: string; lengthen?: boolean };
   /** server job of a pending edit, to pick it up again after leaving the page */
   jobId?: string;
 };
@@ -119,20 +120,83 @@ function soft<T>(p: Promise<T>, fallback: T): Promise<T> {
   });
 }
 
+/** an image as stored: its bytes and type */
+type Bytes = { __bytes: ArrayBuffer; type: string };
+const isBytes = (v: unknown): v is Bytes => !!v && typeof v === "object" && "__bytes" in v;
+
+// the same Blob is saved again on every change of a session: read it only once
+const bytesCache = new WeakMap<Blob, Promise<Bytes>>();
+function toBytes(b: Blob): Promise<Bytes> {
+  let p = bytesCache.get(b);
+  if (!p) {
+    p = b.arrayBuffer().then((buf) => ({ __bytes: buf, type: b.type }));
+    bytesCache.set(b, p);
+  }
+  return p;
+}
+
+/** a fresh Blob from stored data (bytes, or a Blob saved by an older version — copied so it is read now) */
+async function fromStored(v: unknown): Promise<Blob> {
+  if (isBytes(v)) {
+    const blob = new Blob([v.__bytes], { type: v.type });
+    bytesCache.set(blob, Promise.resolve(v));
+    return blob;
+  }
+  const old = v as Blob;
+  try {
+    return new Blob([await old.arrayBuffer()], { type: old.type });
+  } catch {
+    return old; // its data is gone already
+  }
+}
+
+/** Blob fields → bytes, for saving */
+async function pack<T extends object>(obj: T, keys: (keyof T)[]): Promise<T> {
+  const out = { ...obj } as Record<keyof T, unknown>;
+  for (const k of keys) if (obj[k] instanceof Blob) out[k] = await toBytes(obj[k] as Blob);
+  return out as T;
+}
+/** stored bytes → Blob fields, after reading */
+async function unpack<T extends object>(obj: T, keys: (keyof T)[]): Promise<T> {
+  const out = { ...obj } as Record<keyof T, unknown>;
+  for (const k of keys) if (obj[k] != null) out[k] = await fromStored(obj[k]);
+  return out as T;
+}
+
+const packSession = async (s: StoredSession): Promise<StoredSession> => ({
+  ...s,
+  versions: await Promise.all(s.versions.map((v) => pack(v, ["blob"]))),
+});
+const unpackSession = async (s: StoredSession): Promise<StoredSession> => ({
+  ...s,
+  versions: await Promise.all(s.versions.map((v) => unpack(v, ["blob"]))),
+});
+
 export const getSession = (id: string) =>
-  soft(run<StoredSession | undefined>(SESSIONS, "readonly", (s) => s.get(id)), undefined);
+  soft(
+    run<StoredSession | undefined>(SESSIONS, "readonly", (s) => s.get(id)).then((s) => (s ? unpackSession(s) : undefined)),
+    undefined,
+  );
 
 export const saveSession = (session: StoredSession) =>
-  soft(run(SESSIONS, "readwrite", (s) => s.put(session)).then(() => {}), undefined);
+  soft(
+    packSession(session).then((packed) => run(SESSIONS, "readwrite", (s) => s.put(packed))).then(() => {}),
+    undefined,
+  );
 
 export const listCart = () =>
   soft(
-    run<StoredCartItem[]>(CART, "readonly", (s) => s.getAll()).then((items) => items.sort((a, b) => a.addedAt - b.addedAt)),
+    run<StoredCartItem[]>(CART, "readonly", (s) => s.getAll())
+      .then((items) => Promise.all(items.map((i) => unpack(i, ["blob"]))))
+      .then((items) => items.sort((a, b) => a.addedAt - b.addedAt)),
     [],
   );
 
 export const saveCartItem = (item: StoredCartItem) =>
-  soft(run(CART, "readwrite", (s) => s.put(item)).then(() => {}), undefined);
+  soft(
+    pack(item, ["blob"]).then((packed) => run(CART, "readwrite", (s) => s.put(packed))).then(() => {}),
+    undefined,
+  );
 
 export const deleteCartItem = (id: string) =>
   soft(run(CART, "readwrite", (s) => s.delete(id)).then(() => {}), undefined);
@@ -156,8 +220,10 @@ const setMeta = (key: string, value: unknown) =>
     undefined,
   );
 
-export const getPendingCreate = () => getMeta<PendingCreate>("pendingCreate");
-export const setPendingCreate = (p: PendingCreate | undefined) => setMeta("pendingCreate", p);
+export const getPendingCreate = () =>
+  getMeta<PendingCreate>("pendingCreate").then((p) => (p ? soft(unpack(p, ["photo"]), undefined) : undefined));
+export const setPendingCreate = (p: PendingCreate | undefined) =>
+  p ? soft(pack(p, ["photo"]), p).then((packed) => setMeta("pendingCreate", packed)) : setMeta("pendingCreate", undefined);
 
 /** the design on screen, reopened when the customer comes back to the page */
 export const getOpenSessionId = () => getMeta<string>("openSessionId");
