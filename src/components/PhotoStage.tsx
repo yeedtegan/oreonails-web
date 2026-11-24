@@ -2,7 +2,6 @@
 
 import type { DragEvent, ReactNode } from "react";
 import { CloseIcon, CloudUploadIcon, SparkleIcon, UploadIcon } from "./icons";
-import type { HandCheck } from "@/lib/handDetector";
 
 export type GenError = { message: string; retryable: boolean };
 
@@ -15,7 +14,6 @@ type Props = {
   openPicker: () => void;
   removePhoto: () => void;
   loading: boolean;
-  handCheck: HandCheck;
   genError: GenError | null;
   onRetry: () => void;
 };
@@ -45,12 +43,10 @@ function Pill({ children, onClick, label }: { children: ReactNode; onClick: () =
 
 /**
  * One frame for the whole photo flow: empty drop zone → uploaded photo →
- * checking → generating / error. The finished design opens in ResultView.
+ * generating / error. The finished design opens in ResultView.
  */
 export default function PhotoStage(p: Props) {
   const hasPhoto = !!p.previewUrl;
-  const check = p.handCheck;
-  const failed = check.status === "fail";
 
   return (
     <div
@@ -173,53 +169,6 @@ export default function PhotoStage(p: Props) {
                 </button>
               )}
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── hand check ── */}
-      {hasPhoto && !p.loading && !p.genError && (
-        <div className="absolute bottom-3 left-3 max-w-[calc(100%-1.5rem)]" role="status" aria-live="polite">
-          {check.status === "checking" && (
-            <span className="flex items-center gap-2 rounded-full bg-black/55 px-3 py-1.5 text-sm font-semibold text-white backdrop-blur">
-              <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/40 border-t-white" />
-              Checking your photo…
-            </span>
-          )}
-          {check.status === "ok" && (
-            <span className="flex items-center gap-1.5 rounded-full bg-emerald-700/85 px-3 py-1.5 text-sm font-semibold text-white backdrop-blur">
-              ✓ {check.message}
-            </span>
-          )}
-          {(check.status === "warn" || check.status === "error") && (
-            <span
-              className={`flex items-start gap-1.5 rounded-xl px-3 py-1.5 text-sm font-semibold text-white backdrop-blur ${
-                check.status === "warn" ? "bg-amber-700/85" : "bg-black/55"
-              }`}
-            >
-              <span aria-hidden>!</span>
-              {check.message}
-            </span>
-          )}
-        </div>
-      )}
-
-      {failed && !p.loading && (
-        <div className="absolute inset-0 grid place-items-center bg-wine/35 p-4 backdrop-blur-[2px]" role="alert">
-          <div className="max-w-sm rounded-2xl bg-white/95 px-5 py-4 text-center shadow-xl">
-            <p className="font-serif text-lg leading-snug text-wine">No hand found</p>
-            <p className="mt-1 text-sm leading-snug text-cocoa">{check.message}</p>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                p.openPicker();
-              }}
-              className="btn-gold btn-label mt-3 inline-flex items-center gap-2 rounded-full px-5 py-2 text-[15px] text-white"
-            >
-              <UploadIcon className="h-4 w-4" />
-              Choose another photo
-            </button>
           </div>
         </div>
       )}

@@ -20,7 +20,7 @@ import {
   SparkleIcon,
   UserIcon,
 } from "./icons";
-import { DESIGN_PRICE, MAX_PROMPT, QUICK_ADD, QUICK_ADD_CATEGORIES, type QuickAddCategory } from "@/lib/constants";
+import { DESIGN_PRICE, MAX_HISTORY, MAX_PROMPT, QUICK_ADD, QUICK_ADD_CATEGORIES, type QuickAddCategory } from "@/lib/constants";
 import { GenerationError, startDesign, waitForDesign } from "@/lib/generate";
 import type { StoredMessage, StoredVersion } from "@/lib/designStore";
 import { uid } from "@/lib/uid";
@@ -37,6 +37,22 @@ export type DesignSession = {
 };
 
 export type SessionUpdate = (fn: (s: DesignSession) => DesignSession) => void;
+
+/**
+ * What was asked for to get to `base`, oldest first (first prompt, then each edit) — sent with an edit so a
+ * nail length asked for earlier is kept. Older saved versions have no baseId: the one before them is assumed.
+ */
+function requestsLeadingTo(versions: DesignVersion[], base: DesignVersion): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (let v: DesignVersion | undefined = base; v && !seen.has(v.id); ) {
+    seen.add(v.id);
+    if (v.instruction) out.unshift(v.instruction);
+    const i = versions.indexOf(v);
+    v = v.baseId ? versions.find((x) => x.id === v!.baseId) : i > 0 ? versions[i - 1] : undefined;
+  }
+  return out.slice(-MAX_HISTORY);
+}
 
 type Props = {
   session: DesignSession;
@@ -90,6 +106,7 @@ export async function followEdit(msg: Message & { jobId: string }, update: Sessi
       blob,
       url: URL.createObjectURL(blob),
       instruction: msg.retry?.text ?? "",
+      baseId: msg.retry?.baseId,
       favorite: false,
       createdAt: Date.now(),
     };
@@ -288,10 +305,10 @@ export default function ResultView({ session, update, initialVersionId, onNewDes
 
   const togglePick = (id: string) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
 
-  async function edit(text: string, baseId: string, lengthen = false) {
+  async function edit(text: string, baseId: string) {
     const base = versions.find((v) => v.id === baseId) ?? selected;
     const pendingId = uid();
-    const resend = { text, baseId: base.id, ...(lengthen && { lengthen }) };
+    const resend = { text, baseId: base.id };
     inFlight.add(pendingId); // until the job id is saved: a reopen must not call it interrupted
     // keeps `retry` so the edit can be resent if it fails or is interrupted
     const pending: Message = {
@@ -305,7 +322,7 @@ export default function ResultView({ session, update, initialVersionId, onNewDes
     update((s) => ({ ...s, messages: [...s.messages, pending] }));
     let jobId: string;
     try {
-      jobId = await startDesign({ mode: "edit", image: base.blob, prompt: text, lengthen });
+      jobId = await startDesign({ mode: "edit", image: base.blob, prompt: text, history: requestsLeadingTo(versions, base) });
     } catch (err) {
       update((s) => ({
         ...s,
@@ -334,16 +351,16 @@ export default function ResultView({ session, update, initialVersionId, onNewDes
   function retry(msg: Message) {
     if (!msg.retry || working) return;
     update((s) => ({ ...s, messages: s.messages.filter((x) => x.id !== msg.id) }));
-    edit(msg.retry.text, msg.retry.baseId, msg.retry.lengthen);
+    edit(msg.retry.text, msg.retry.baseId);
   }
 
   function toggleFavorite(id: string) {
     update((s) => ({ ...s, versions: s.versions.map((v) => (v.id === id ? { ...v, favorite: !v.favorite } : v)) }));
   }
 
-  function send(text: string, lengthen = false) {
+  function send(text: string) {
     update((s) => ({ ...s, messages: [...s.messages, { id: uid(), role: "user", time: Date.now(), text }] }));
-    edit(text, selected.id, lengthen);
+    edit(text, selected.id);
   }
 
   /** the picked Quick Add details as one edit */
@@ -352,7 +369,7 @@ export default function ResultView({ session, update, initialVersionId, onNewDes
     if (!picked.length) return showToast("Pick at least one detail");
     const parts = QUICK_ADD.filter((q) => picked.includes(q.id)).map((q) => q.text);
     const text = parts.join(", ");
-    send(text.charAt(0).toUpperCase() + text.slice(1), true); // Quick Add: longer nails, room for the details
+    send(text.charAt(0).toUpperCase() + text.slice(1));
     setPicked([]);
     setTab("chat");
   }
@@ -403,7 +420,7 @@ export default function ResultView({ session, update, initialVersionId, onNewDes
       onClick={generatePicked}
       disabled={working}
       className={`btn-brown inline-flex items-center justify-center rounded-full font-medium text-white disabled:opacity-60 ${
-        compact ? "min-h-10 gap-2 px-[26px] text-[15px]" : "mt-4 min-h-11 w-full gap-2.5 px-[22px] text-[15px]"
+        compact ? "min-h-10 gap-2 px-[26px] text-[15px]" : "mt-4 min-h-11 w-full flex-none gap-2.5 px-[22px] text-[15px]"
       }`}
     >
       {working ? (
@@ -418,12 +435,13 @@ export default function ResultView({ session, update, initialVersionId, onNewDes
   return (
     // phones: design, then tabs (Chat · Quick Add · History) with the chat input / Generate fixed at the bottom
     // tablet: design + history · chat/quick/history tabs — desktop (1180px+): + a Quick Add Details column
-    <div className="mx-auto w-full max-w-[97.5rem] px-[clamp(14px,3vw,40px)] max-tab:flex max-tab:h-[calc(var(--vvh,100dvh)-77px)] max-tab:flex-col">
+    // tablet+: the columns fill the screen under the header, and each one scrolls on its own
+    <div className="mx-auto flex w-full max-w-[97.5rem] flex-col px-[clamp(14px,3vw,40px)] max-tab:h-[calc(var(--vvh,100dvh)-77px)] tab:h-[calc(100dvh-77px)] tab:min-h-[560px] nav:h-[calc(100dvh-85px)]">
       <div
-        className="flex min-h-0 flex-1 flex-col gap-2 pt-2.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] tab:grid tab:grid-cols-2 tab:gap-[18px] tab:pt-[18px] tab:pb-[30px] nav:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)_minmax(0,0.62fr)]"
+        className="flex min-h-0 flex-1 flex-col gap-2 pt-2.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] tab:grid tab:grid-cols-2 tab:grid-rows-[minmax(0,1fr)] tab:gap-[18px] tab:pt-[18px] tab:pb-[30px] nav:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)_minmax(0,0.62fr)]"
       >
         {/* ───────────── Design + history ───────────── */}
-        <section aria-label="Your nail design" className={`flex flex-none flex-col ${pane} ${keyboard ? "max-tab:hidden" : ""}`}>
+        <section aria-label="Your nail design" className={`flex flex-none flex-col tab:min-h-0 tab:overflow-y-auto tab:overscroll-contain ${pane} ${keyboard ? "max-tab:hidden" : ""}`}>
           <button type="button" onClick={onNewDesign} className="mb-3.5 hidden items-center gap-2.5 self-start text-[16px] tab:flex">
             <ArrowLeftIcon className="h-[22px] w-[22px]" />
             New Design
@@ -565,7 +583,7 @@ export default function ResultView({ session, update, initialVersionId, onNewDes
           <div className={`min-h-0 flex-1 flex-col ${show("chat")}`}>
             <div
               ref={chatRef}
-              className="flex min-h-0 flex-1 flex-col gap-[18px] overflow-y-auto overscroll-contain px-1 py-2.5 tab:max-h-[560px] tab:min-h-80"
+              className="flex min-h-0 flex-1 flex-col gap-[18px] overflow-y-auto overscroll-contain px-1 py-2.5"
               aria-live="polite"
               aria-label="Chat with the Oreo Nails assistant"
             >
@@ -645,7 +663,7 @@ export default function ResultView({ session, update, initialVersionId, onNewDes
                 </button>
               ))}
             </div>
-            <ul className="grid min-h-0 flex-1 grid-cols-4 content-start gap-[7px] overflow-y-auto overscroll-contain min-[481px]:gap-2.5 tab:flex-none tab:overflow-visible">
+            <ul className="grid min-h-0 flex-1 grid-cols-4 content-start gap-[7px] overflow-y-auto overscroll-contain min-[481px]:gap-2.5">
               {QUICK_ADD.filter((q) => filter === "all" || q.category === filter).map((q) => {
                 const on = picked.includes(q.id);
                 return (
@@ -671,13 +689,13 @@ export default function ResultView({ session, update, initialVersionId, onNewDes
                 );
               })}
             </ul>
-            <div className="flex-none pt-2.5 pb-1 text-center tab:sticky tab:bottom-0 tab:bg-[linear-gradient(transparent,var(--color-cream)_40%)]">
+            <div className="flex-none pt-2.5 pb-1 text-center">
               {generateButton(true)}
             </div>
           </div>
 
           {/* history */}
-          <div className={`min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain tab:overflow-visible ${show("history")}`}>
+          <div className={`min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain ${show("history")}`}>
             <div className="flex items-center gap-2.5 pb-0.5 tab:py-1">
               <HistoryIcon className="h-[22px] w-[22px]" />
               <h2 className="text-[16px] font-semibold tab:text-[20px]">Design History</h2>
@@ -723,12 +741,12 @@ export default function ResultView({ session, update, initialVersionId, onNewDes
         </section>
 
         {/* ───────────── Quick Add Details (1180px+) ───────────── */}
-        <section aria-labelledby="quick-add-title" className={`hidden flex-col nav:flex ${pane}`}>
-          <h2 id="quick-add-title" className="flex items-center gap-2.5 pb-3 text-[17px] font-medium">
+        <section aria-labelledby="quick-add-title" className={`hidden min-h-0 flex-col nav:flex ${pane}`}>
+          <h2 id="quick-add-title" className="flex flex-none items-center gap-2.5 pb-3 text-[17px] font-medium">
             <SparkleIcon className="h-[22px] w-[22px]" />
             Quick Add Details
           </h2>
-          <ul className="flex flex-col gap-2.5">
+          <ul className="-mx-1 flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto overscroll-contain px-1 pb-1">
             {QUICK_ADD.map((q) => {
               const on = picked.includes(q.id);
               return (

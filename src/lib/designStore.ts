@@ -13,6 +13,8 @@ export type StoredVersion = {
   blob: Blob;
   /** what was asked for this version (first prompt, or the chat edit) */
   instruction: string;
+  /** the version this one was edited from (absent on the first design and on designs saved before it existed) */
+  baseId?: string;
   favorite: boolean;
   /** when it was generated (epoch ms); older saved designs don't have it */
   createdAt?: number;
@@ -26,7 +28,7 @@ export type StoredMessage = {
   time: number;
   status?: "pending" | "error";
   /** the edit to resend (failed edits, and edits still running) */
-  retry?: { text: string; baseId: string; lengthen?: boolean };
+  retry?: { text: string; baseId: string };
   /** server job of a pending edit, to pick it up again after leaving the page */
   jobId?: string;
 };

@@ -1,9 +1,22 @@
 import { NextResponse } from "next/server";
-import { ACCEPTED_TYPES, MAX_FILE_BYTES, MAX_PROMPT, MORE_STYLES, STYLES } from "@/lib/constants";
+import { ACCEPTED_TYPES, MAX_FILE_BYTES, MAX_HISTORY, MAX_PROMPT, MORE_STYLES, STYLES } from "@/lib/constants";
 import { accountApi } from "@/lib/server/account";
-import { BUSY, NO_STORE, REJECTED, UNAVAILABLE } from "@/lib/server/generateErrors";
+import { BUSY, NO_HAND, NO_STORE, REJECTED, UNAVAILABLE } from "@/lib/server/generateErrors";
 
 const STYLE_LABELS = new Map([...STYLES, ...MORE_STYLES].map((s) => [s.id as string, s.label]));
+
+/**
+ * Nail length, for every generation: a length the customer asks for wins; otherwise the free edge is 6–10 mm.
+ * Edits without a length take the one from the latest earlier request that gave one (sent as `history`);
+ * if none did, the current length is kept and only nails still at natural length get the default.
+ */
+const LENGTH_RULE = {
+  create:
+    "Nail length: if the design request says how long the nails should be or how far they extend past the fingertip, follow it exactly. Otherwise make the free edge of every nail extend 6–10 mm (about 1/4 to 3/8 inch) past the fingertip, like medium-length press-on / acrylic extensions, with a natural, consistent length for each finger.",
+  edit:
+    "Nail length: if this request says how long the nails should be or how far they extend past the fingertip (including longer / shorter), follow it exactly. Otherwise, if an earlier request listed below asked for a nail length, keep the nails at that length (the most recent one asked for) — even if it is short. Otherwise keep the current length, except nails at natural length (free edge shorter than 6 mm past the fingertip), which get extended to 6–10 mm (about 1/4 to 3/8 inch) like medium-length press-on / acrylic extensions. Keep a natural, consistent length for each finger.",
+};
+const SPREAD = "Spread any added details across the full length of each nail so they are not crowded.";
 
 function buildPrompt(userPrompt: string, styles: string[]) {
   const styleText = styles
@@ -14,6 +27,7 @@ function buildPrompt(userPrompt: string, styles: string[]) {
     "Edit this photo of a hand: apply a professional manicure nail design to the fingernails.",
     userPrompt && `Design request: ${userPrompt}.`,
     styleText && `Nail style: ${styleText}.`,
+    LENGTH_RULE.create,
     "Keep the hand, skin tone, pose, framing, lighting and background exactly the same — only change the nails.",
     "Photorealistic, high detail, salon quality.",
   ]
@@ -21,17 +35,15 @@ function buildPrompt(userPrompt: string, styles: string[]) {
     .join(" ");
 }
 
-/**
- * Refining an existing design: change only what the customer asked for.
- * `lengthen` (Quick Add): nails 6–10 mm past the fingertips, so the added details have room
- * instead of squeezing them onto the current short nails.
- */
-function buildEditPrompt(instruction: string, lengthen: boolean) {
+/** Refining an existing design: change only what the customer asked for. */
+function buildEditPrompt(instruction: string, history: string[]) {
   return [
     "This photo shows a hand with a manicure. Edit ONLY the nails according to this request:",
     `${instruction}.`,
-    lengthen &&
-      "Also set the nail length: on every nail the free edge must extend 6–10 mm (about 1/4 to 3/8 inch) past the fingertip, like medium-length press-on / acrylic extensions — lengthen nails that are shorter than that and shorten nails that are longer, keeping all nails a natural, consistent length for each finger. Keep the same nail shape and design, and spread the added details across the full length of each nail so they are not crowded.",
+    history.length > 0 &&
+      `Earlier requests that led to this design (oldest first, already applied — for context only): ${history.map((h) => `"${h}"`).join("; ")}.`,
+    LENGTH_RULE.edit,
+    SPREAD,
     "Keep the rest of the current nail design as it is unless the request changes it.",
     "Keep the hand, skin tone, pose, framing, lighting and background exactly the same.",
     "Photorealistic, high detail, salon quality.",
@@ -46,7 +58,11 @@ export async function POST(req: Request) {
   const prompt = String(form.get("prompt") ?? "").trim();
   const styles = form.getAll("styles").map(String);
   const mode = form.get("mode") === "edit" ? "edit" : "create";
-  const lengthen = form.get("lengthen") === "1";
+  const history = form
+    .getAll("history")
+    .map((h) => String(h).replace(/\s+/g, " ").trim().slice(0, MAX_PROMPT))
+    .filter(Boolean)
+    .slice(-MAX_HISTORY);
 
   if (!(image instanceof File)) {
     return NextResponse.json({ error: "A hand photo is required." }, { status: 400 });
@@ -69,18 +85,23 @@ export async function POST(req: Request) {
 
   // generation takes minutes: oreonails-api runs it as a background job and the browser polls
   // GET /api/generate/<jobId> (short requests — fine on Workers, and leaving the page doesn't lose it)
-  const finalPrompt = mode === "edit" ? buildEditPrompt(prompt, lengthen) : buildPrompt(prompt, styles);
+  const finalPrompt = mode === "edit" ? buildEditPrompt(prompt, history) : buildPrompt(prompt, styles);
   const upstreamForm = new FormData();
   upstreamForm.append("image", image, image.name || "hand.png");
   upstreamForm.append("prompt", finalPrompt);
+  // the customer's own photo (not one of our designs): the API checks there is a hand in it first
+  if (mode === "create") upstreamForm.append("checkHand", "1");
   const res = await accountApi("/generate-image/jobs", { method: "POST", body: upstreamForm }).catch((err) => {
     console.error("[generate] image API unreachable:", err);
     return null;
   });
   if (!res) return NextResponse.json({ error: UNAVAILABLE, retryable: true }, { status: 503, headers: NO_STORE });
-  const data = (await res.json().catch(() => ({}))) as { jobId?: string; error?: string };
+  const data = (await res.json().catch(() => ({}))) as { jobId?: string; error?: string; code?: string };
   if (res.status === 202 && data.jobId) {
     return NextResponse.json({ jobId: data.jobId }, { status: 202, headers: NO_STORE });
+  }
+  if (data.code === "no_hand") {
+    return NextResponse.json({ error: NO_HAND, retryable: false, code: "no_hand" }, { status: 422, headers: NO_STORE });
   }
   console.error("[generate] image API refused the job", res.status, data.error ?? "");
   if (res.status === 429 || res.status >= 500) {

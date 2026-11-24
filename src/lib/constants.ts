@@ -45,6 +45,9 @@ export function lineHasStyle(line: string, id: NailStyleId) {
   return !!prompt && normalize(line).includes(prompt);
 }
 
+/** Earlier requests sent with an edit (the most recent ones), so a nail length asked for before is kept. */
+export const MAX_HISTORY = 10;
+
 /** Price of one custom press-on set (USD). */
 export const DESIGN_PRICE = 28;
 

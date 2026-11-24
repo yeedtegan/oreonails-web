@@ -17,7 +17,6 @@ import {
   type PendingCreate,
   type StoredSession,
 } from "@/lib/designStore";
-import { checkHandPhoto, warmUpHandDetector, type HandCheck } from "@/lib/handDetector";
 import { ACCEPTED_TYPES, MAX_FILE_BYTES, MAX_PROMPT, QUICK_ADD } from "@/lib/constants";
 import { uid } from "@/lib/uid";
 
@@ -26,7 +25,7 @@ function toStored(s: DesignSession): StoredSession {
     id: s.id,
     createdAt: s.createdAt,
     updatedAt: Date.now(),
-    versions: s.versions.map(({ id, blob, instruction, favorite, createdAt }) => ({ id, blob, instruction, favorite, createdAt })),
+    versions: s.versions.map(({ id, blob, instruction, baseId, favorite, createdAt }) => ({ id, blob, instruction, baseId, favorite, createdAt })),
     messages: s.messages,
   };
 }
@@ -65,7 +64,6 @@ export default function NailStudio() {
   // remounts the result screen when a design is (re)opened, starting on this version
   const [view, setView] = useState<{ key: number; versionId?: string }>({ key: 0 });
   const { openRequest } = useCart();
-  const [handCheck, setHandCheck] = useState<HandCheck>({ status: "idle" });
   const [genError, setGenError] = useState<GenError | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
   // ignore late answers (hand check / generation) for a photo that was replaced
@@ -182,24 +180,14 @@ export default function NailStudio() {
     setLoading(false);
     setGenError(null);
 
-    const token = ++photoToken.current;
-    if (!f) {
-      setHandCheck({ status: "idle" });
-      return;
-    }
-    setHandCheck({ status: "checking" });
-    checkHandPhoto(f).then((check) => {
-      if (photoToken.current === token) setHandCheck(check);
-    });
+    photoToken.current++; // answers still coming for the previous photo are ignored
   }
 
   function openPicker() {
-    warmUpHandDetector().catch(() => {});
     inputRef.current?.click();
   }
 
   function openCamera() {
-    warmUpHandDetector().catch(() => {});
     cameraRef.current?.click();
   }
 
@@ -231,14 +219,6 @@ export default function NailStudio() {
     e.preventDefault();
     if (!file) {
       setError("Upload a photo of your hand first so we can fit the design to your nails.");
-      return;
-    }
-    if (handCheck.status === "checking") {
-      setError("Still checking your photo — one moment please.");
-      return;
-    }
-    if (handCheck.status === "fail") {
-      setError(handCheck.message);
       return;
     }
     const details = QUICK_ADD.filter((q) => quick.includes(q.id)).map((q) => q.text);
@@ -374,7 +354,6 @@ export default function NailStudio() {
           toggleQuick={toggleQuick}
           error={error}
           loading={loading}
-          handCheck={handCheck}
           genError={genError}
           onRetry={retry}
         />
