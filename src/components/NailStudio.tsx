@@ -159,7 +159,6 @@ export default function NailStudio() {
   }
 
   const inputRef = useRef<HTMLInputElement>(null);
-  const cameraRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   function focusPrompt() {
@@ -185,10 +184,6 @@ export default function NailStudio() {
 
   function openPicker() {
     inputRef.current?.click();
-  }
-
-  function openCamera() {
-    cameraRef.current?.click();
   }
 
   function pickFile(f: File | undefined | null) {
@@ -322,20 +317,6 @@ export default function NailStudio() {
           e.target.value = "";
         }}
       />
-      {/* opens the camera directly on phones */}
-      <input
-        ref={cameraRef}
-        type="file"
-        accept={ACCEPTED_TYPES.join(",")}
-        capture="environment"
-        className="sr-only"
-        tabIndex={-1}
-        aria-label="Take hand photo"
-        onChange={(e) => {
-          pickFile(e.target.files?.[0]);
-          e.target.value = "";
-        }}
-      />
 
       {!session && (
         <StudioView
@@ -345,8 +326,6 @@ export default function NailStudio() {
           setDragging={setDragging}
           onDrop={onDrop}
           openPicker={openPicker}
-          openCamera={openCamera}
-          removePhoto={() => setPhoto(null)}
           prompt={prompt}
           setPrompt={setPrompt}
           textareaRef={textareaRef}

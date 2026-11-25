@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState, type DragEvent, type RefObject } from "react";
-import PhotoStage, { type GenError } from "./PhotoStage";
-import { CameraIcon, CheckIcon, ChevronRightIcon, GalleryIcon, PencilIcon, SparkleIcon } from "./icons";
+import { ErrorOverlay, GeneratingOverlay, type GenError } from "./PhotoStage";
+import { CameraIcon, CheckIcon, ChevronRightIcon, PencilIcon, SparkleIcon } from "./icons";
 import { MAX_PROMPT, QUICK_ADD } from "@/lib/constants";
 
 type Props = {
@@ -12,8 +12,6 @@ type Props = {
   setDragging: (v: boolean) => void;
   onDrop: (e: DragEvent<HTMLDivElement>) => void;
   openPicker: () => void;
-  openCamera: () => void;
-  removePhoto: () => void;
   prompt: string;
   setPrompt: (v: string) => void;
   textareaRef: RefObject<HTMLTextAreaElement | null>;
@@ -26,27 +24,28 @@ type Props = {
   onRetry: () => void;
 };
 
-/** two soft photo frames with the upload cloud in front (empty upload area) */
+/** two soft photo frames with the upload cloud in front (empty upload area) — shrinks on short screens */
 function UploadArt() {
   return (
-    <svg viewBox="0 0 160 130" className="h-[112px] w-[138px]" aria-hidden fill="none">
-      <g stroke="#ead6cc" strokeWidth="5" strokeLinejoin="round">
-        <rect x="14" y="20" width="70" height="62" rx="8" transform="rotate(-14 49 51)" fill="#f6e7e0" />
-        <rect x="62" y="16" width="70" height="62" rx="8" transform="rotate(10 97 47)" fill="#f6e7e0" />
+    <svg
+      viewBox="0 0 200 150"
+      fill="none"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+      className="mx-auto mb-1 block h-[clamp(56px,16vh,130px)] min-h-0 w-auto shrink tab:mb-1.5 tab:h-[clamp(60px,17vh,150px)] [@media(max-height:600px)]:hidden"
+    >
+      <g transform="rotate(-12 70 60)">
+        <rect x="22" y="22" width="96" height="78" rx="10" fill="#f6e6df" stroke="#ead6cd" strokeWidth="4" />
+        <path d="M36 88l22-28 16 18 10-10 20 20z" fill="#ead6cd" />
       </g>
-      <g fill="#ecd9cf">
-        <path d="M24 74 40 50l13 18 7-8 13 16z" transform="rotate(-14 49 51)" />
-        <path d="M72 70l16-24 13 18 7-8 13 16z" transform="rotate(10 97 47)" />
-        <circle cx="117" cy="32" r="6" />
+      <g transform="rotate(8 130 70)">
+        <rect x="86" y="30" width="96" height="84" rx="10" fill="#f8ebe5" stroke="#ead6cd" strokeWidth="4" />
+        <path d="M98 102l24-32 18 20 10-10 22 22z" fill="#ecd8cf" />
+        <circle cx="158" cy="52" r="8" fill="#ecd8cf" />
       </g>
-      <path
-        d="M58 104h-6a16 16 0 0 1-2-31.9A22 22 0 0 1 92 66a14 14 0 0 1 18 18 12 12 0 0 1-4 20h-4"
-        stroke="#6e412a"
-        strokeWidth="5"
-        strokeLinecap="round"
-        fill="#fbf2ee"
-      />
-      <path d="M80 122V86m0 0-12 12m12-12 12 12" stroke="#6e412a" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M78 128h-6a20 20 0 0 1-2-40 26 26 0 0 1 50-6 18 18 0 0 1 10 34 14 14 0 0 1-6 2h-4" stroke="#7a4a33" strokeWidth="6" fill="#fbf2ee" />
+      <path d="M100 146V100M86 114l14-14 14 14" stroke="#7a4a33" strokeWidth="6" />
     </svg>
   );
 }
@@ -80,15 +79,15 @@ function QuickAdd({ quick, toggleQuick }: { quick: string[]; toggleQuick: (id: s
   };
 
   return (
-    <section className="mt-6" aria-labelledby="quick-title">
-      <div className="flex items-center justify-between gap-3 px-1">
-        <h2 id="quick-title" className="flex items-center gap-2.5 text-[18px] font-medium text-cocoa">
-          <SparkleIcon className="h-[22px] w-[22px]" />
+    <section aria-labelledby="quick-title" className="flex-none">
+      <div className="mt-3 mb-2 flex items-center gap-2.5 px-0.5 tab:mt-4 tab:mb-2.5 [@media(max-height:600px)]:mt-2 [@media(max-height:600px)]:mb-1.5">
+        <h2 id="quick-title" className="flex items-center gap-2.5 text-[17px] font-medium text-cocoa tab:text-[20px]">
+          <SparkleIcon className="h-[22px] w-[22px] tab:h-[26px] tab:w-[26px]" />
           Quick Add
           {quick.length > 0 && <span className="rounded-full bg-pink px-2 py-px text-[13px] font-medium">{quick.length}</span>}
         </h2>
-        <button type="button" onClick={() => setAll((v) => !v)} aria-expanded={all} className="flex items-center gap-1 py-1 text-[14px] text-cocoa">
-          {all ? "Show Less" : "See All"}
+        <button type="button" onClick={() => setAll((v) => !v)} aria-expanded={all} className="ml-auto flex items-center gap-0.5 py-1 text-[14px] text-cocoa">
+          {all ? "Show less" : "See All"}
           <ChevronRightIcon className={`h-4 w-4 transition ${all ? "-rotate-90" : ""}`} />
         </button>
       </div>
@@ -96,36 +95,39 @@ function QuickAdd({ quick, toggleQuick }: { quick: string[]; toggleQuick: (id: s
         ref={rowRef}
         className={
           all
-            ? "mt-3 grid grid-cols-4 gap-x-2.5 gap-y-3 min-[481px]:grid-cols-5"
-            : "-mx-4 mt-3 flex snap-x snap-mandatory scroll-px-4 gap-1.5 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:-mx-6 sm:scroll-px-6 sm:px-6 [&::-webkit-scrollbar]:hidden"
+            ? "grid max-h-[38vh] grid-cols-4 gap-2.5 overflow-y-auto overscroll-contain px-0.5 pt-0.5 pb-1 tab:max-h-[34vh]"
+            : "flex snap-x snap-mandatory gap-2.5 overflow-x-auto px-0.5 pt-0.5 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         }
       >
         {QUICK_ADD.map((q) => {
           const on = quick.includes(q.id);
           return (
-            <li key={q.id} className={all ? "" : "w-[calc((100%-5*6px)/5.35)] max-w-[110px] shrink-0 snap-start"}>
-              <button type="button" onClick={() => toggleQuick(q.id)} aria-pressed={on} className="group block w-full text-center">
-                <span
-                  className={`relative block aspect-[1/1.09] overflow-hidden rounded-[16px] border-2 transition group-active:scale-95 ${
-                    on ? "border-brown shadow-[0_0_0_3px_rgba(110,65,42,.18)]" : "border-transparent"
-                  }`}
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element -- small static tile */}
-                  <img src={q.image} alt="" className="h-full w-full object-cover" />
-                  {on && (
-                    <span className="absolute top-1.5 right-1.5 grid h-5 w-5 place-items-center rounded-full bg-brown text-white">
-                      <CheckIcon className="h-3 w-3" />
-                    </span>
-                  )}
-                </span>
-                <span className="-mx-1 mt-1.5 block text-[12.5px] tracking-[-0.01em] whitespace-nowrap text-cocoa">{q.label}</span>
+            <li key={q.id} className={all ? "" : "shrink-0 grow-0 basis-[calc((100%-40px)/5)] snap-start tab:basis-[calc((100%-40px)/4.6)]"}>
+              <button
+                type="button"
+                onClick={() => toggleQuick(q.id)}
+                aria-pressed={on}
+                className="relative block w-full text-center text-[12px] font-medium whitespace-nowrap text-cocoa transition active:scale-95 tab:text-[13.5px]"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element -- small static tile */}
+                <img
+                  src={q.image}
+                  alt=""
+                  className={`mb-[3px] aspect-[.93] w-full rounded-[14px] border-2 object-cover tab:mb-1.5 tab:rounded-2xl ${on ? "border-brown" : "border-transparent"}`}
+                />
+                {q.label}
+                {on && (
+                  <span className="absolute top-1.5 right-1.5 grid h-[22px] w-[22px] place-items-center rounded-full bg-cocoa text-white" aria-hidden>
+                    <CheckIcon className="h-3.5 w-3.5" strokeWidth={3} />
+                  </span>
+                )}
               </button>
             </li>
           );
         })}
       </ul>
       {!all && page.n > 1 && (
-        <div className="mt-2.5 flex justify-center gap-1.5">
+        <div className="mt-1.5 flex justify-center gap-[7px] tab:mt-2.5 [@media(max-height:600px)]:mt-1">
           {Array.from({ length: page.n }, (_, k) => (
             <button
               key={k}
@@ -133,7 +135,7 @@ function QuickAdd({ quick, toggleQuick }: { quick: string[]; toggleQuick: (id: s
               aria-label={`Quick Add page ${k + 1}`}
               aria-current={k === page.i}
               onClick={() => goTo(k)}
-              className={`h-1.5 w-1.5 rounded-full transition ${k === page.i ? "bg-cocoa" : "bg-[#e6d5cc]"}`}
+              className={`h-2 w-2 rounded-full transition ${k === page.i ? "bg-brown" : "bg-[#e2d2ca]"}`}
             />
           ))}
         </div>
@@ -142,136 +144,156 @@ function QuickAdd({ quick, toggleQuick }: { quick: string[]; toggleQuick: (id: s
   );
 }
 
-/** Design studio (upload → quick add / describe → generate), one centred column on every screen size. */
+/**
+ * Design studio start screen (upload → quick add / describe → generate): one centred column that fills the screen
+ * under the header — the photo card takes the free height, describe + Generate sit at the bottom.
+ */
 export default function StudioView({ textareaRef, ...p }: Props) {
   const hasPhoto = !!p.previewUrl;
   const busy = p.loading;
+  /** Generate without a photo: the upload card shakes */
+  const [shake, setShake] = useState(false);
+  /** the description runs past 2 lines: the illustration makes room for it */
+  const [tall, setTall] = useState(false);
 
-  const buttons = (
-    <div className="flex gap-3">
-      <button
-        type="button"
-        onClick={p.openPicker}
-        disabled={busy}
-        className="btn-brown flex min-h-[42px] flex-[2] items-center justify-center gap-2.5 rounded-full px-4 text-[16px] font-medium whitespace-nowrap text-white transition active:scale-[0.98] disabled:opacity-60 pointer-fine:hover:brightness-110"
-      >
-        <GalleryIcon className="h-[21px] w-[21px] shrink-0" />
-        {hasPhoto ? "Change Photo" : "Upload"}
-      </button>
-      <button
-        type="button"
-        onClick={p.openCamera}
-        disabled={busy}
-        aria-label="Take a photo of your hand"
-        className="flex min-h-[42px] flex-1 items-center justify-center rounded-full border-[1.5px] border-brown bg-ivory text-brown transition active:scale-[0.98] disabled:opacity-60 tab:pointer-fine:hidden"
-      >
-        <CameraIcon className="h-[21px] w-[21px]" />
-      </button>
-    </div>
-  );
+  // app-like screen: no footer under it
+  useEffect(() => {
+    document.body.classList.add("studio-start");
+    return () => document.body.classList.remove("studio-start");
+  }, []);
+
+  const pick = () => {
+    if (!busy) p.openPicker();
+  };
 
   return (
-    <div className="relative z-10 mx-auto w-full max-w-[640px] px-4 pb-10 sm:px-6">
-      <header className="flex items-center justify-center gap-4 pt-5">
-        <span aria-hidden className="h-px w-5 bg-cocoa/70" />
-        <h1 className="text-[22px] leading-tight text-cocoa">
-          <span className="font-highlight text-brown">Custom</span> Nails
-        </h1>
-        <span aria-hidden className="h-px w-5 bg-cocoa/70" />
-      </header>
+    // a fixed height: a growing description shrinks the photo card instead of pushing Generate down
+    // (too little room → this column scrolls)
+    <div className="relative z-10 flex h-[calc(100dvh-77px)] flex-col overflow-y-auto overscroll-contain px-[clamp(14px,3vw,40px)] nav:h-[calc(100dvh-85px)]">
+      <div className="mx-auto flex w-full max-w-[560px] flex-1 flex-col pt-2.5 pb-[calc(10px+env(safe-area-inset-bottom))] tab:pt-4 tab:pb-[18px]">
+        {/* no visible title — kept for screen readers / the page outline */}
+        <h1 className="sr-only">Custom Nails</h1>
 
-      {/* upload */}
-      <section aria-label="Your hand photo" className="glass-card mt-4 rounded-[24px] p-3">
-        <div
-          onDragOver={(e) => {
-            e.preventDefault();
-            p.setDragging(true);
-          }}
-          onDragLeave={() => p.setDragging(false)}
-          onDrop={p.onDrop}
-          className={`rounded-[20px] border-2 border-dashed p-3 transition sm:p-4 ${p.dragging ? "border-brown bg-pink-2" : "border-[#ead6cc]"}`}
+        {/* upload: the whole dashed area opens the photo picker (phones offer camera or library there) */}
+        <section
+          aria-label="Your hand photo"
+          onAnimationEnd={() => setShake(false)}
+          className={`flex min-h-[220px] flex-1 rounded-[24px] bg-ivory p-2.5 shadow-[0_10px_30px_rgba(110,65,42,.10)] tab:min-h-[190px] tab:rounded-[28px] tab:p-3.5 [@media(max-height:600px)]:min-h-[150px] ${
+            shake ? "animate-[shake_.4s]" : ""
+          }`}
         >
-          {hasPhoto ? (
-            <>
-              <PhotoStage
-                file={p.file}
-                previewUrl={p.previewUrl}
-                dragging={p.dragging}
-                setDragging={p.setDragging}
-                onDrop={p.onDrop}
-                openPicker={p.openPicker}
-                removePhoto={p.removePhoto}
-                loading={p.loading}
-                genError={p.genError}
-                onRetry={p.onRetry}
-              />
-              <div className="mt-3.5 px-1 pb-1">{buttons}</div>
-            </>
-          ) : (
-            <>
-              <button
-                type="button"
-                onClick={p.openPicker}
-                className="flex w-full flex-col items-center px-2 pt-8 pb-14 text-center"
-              >
-                <UploadArt />
-                <span className="mt-2 text-[clamp(19px,5.9vw,26px)] font-semibold whitespace-nowrap text-brown">Upload Your Hand Photo</span>
-                <span className="mt-1 hidden text-[14px] text-cocoa-soft tab:pointer-fine:block">Click or drop a photo here</span>
-              </button>
-              <div className="px-6 pb-5">{buttons}</div>
-            </>
+          <div
+            role={hasPhoto ? undefined : "button"}
+            tabIndex={hasPhoto ? undefined : 0}
+            aria-label={hasPhoto ? undefined : "Take a photo or upload a photo of your hand"}
+            onClick={hasPhoto ? undefined : pick}
+            onKeyDown={(e) => {
+              if (!hasPhoto && (e.key === "Enter" || e.key === " ")) {
+                e.preventDefault();
+                pick();
+              }
+            }}
+            onDragOver={(e) => {
+              e.preventDefault();
+              p.setDragging(true);
+            }}
+            onDragLeave={() => p.setDragging(false)}
+            onDrop={p.onDrop}
+            className={`relative flex min-h-0 flex-1 flex-col justify-center rounded-[22px] border-2 border-dashed px-4 py-3 text-center transition tab:px-[22px] tab:py-[18px] ${
+              hasPhoto ? "" : "cursor-pointer outline-none hover:border-[#d6b3a3] focus-visible:border-brown"
+            } ${p.dragging ? "border-brown bg-pink-2" : shake ? "border-brown" : "border-[#e6cec3]"}`}
+          >
+            {hasPhoto ? (
+              <div className="relative min-h-0 flex-1 overflow-hidden rounded-2xl">
+                {/* eslint-disable-next-line @next/next/no-img-element -- local blob preview */}
+                <img
+                  src={p.previewUrl!}
+                  alt="Your hand photo"
+                  className={`absolute inset-0 h-full w-full object-cover transition ${busy ? "scale-[1.02] opacity-60 blur-[2px]" : ""}`}
+                />
+                {busy && <GeneratingOverlay />}
+                {p.genError && !busy && <ErrorOverlay error={p.genError} onRetry={p.onRetry} openPicker={p.openPicker} />}
+                {!busy && !p.genError && (
+                  <button
+                    type="button"
+                    onClick={pick}
+                    className="absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-cocoa/75 px-3.5 py-[7px] text-[13px] whitespace-nowrap text-white transition hover:bg-cocoa/90"
+                  >
+                    <CameraIcon className="h-4 w-4" />
+                    <span className="pointer-fine:hidden">Tap to change photo</span>
+                    <span className="hidden pointer-fine:inline">Change photo</span>
+                  </button>
+                )}
+              </div>
+            ) : (
+              <>
+                {!tall && <UploadArt />}
+                <h2 className="mb-1 text-[clamp(18px,5.2vw,22px)] leading-tight font-semibold text-balance text-brown tab:text-[26px]">
+                  Take a photo or upload a photo of your hand
+                </h2>
+                <p className="text-[12.5px] text-cocoa-soft tab:text-[14px]">JPG, PNG, WEBP · max 10 MB</p>
+              </>
+            )}
+          </div>
+        </section>
+
+        <QuickAdd quick={p.quick} toggleQuick={p.toggleQuick} />
+
+        {/* describe */}
+        <label className="relative mt-2.5 flex flex-none items-start gap-3 rounded-2xl border border-line bg-[#fffaf8] px-3.5 py-2.5 transition focus-within:border-brown-2 tab:mt-3 tab:rounded-[18px] tab:px-4 tab:py-3.5 [@media(max-height:600px)]:py-2">
+          <PencilIcon className="mt-0.5 h-[22px] w-[22px] shrink-0 text-cocoa-soft" />
+          <span className="sr-only">Describe your nail design</span>
+          <textarea
+            id="m-prompt"
+            ref={textareaRef}
+            value={p.prompt}
+            maxLength={MAX_PROMPT}
+            onChange={(e) => {
+              p.setPrompt(e.target.value);
+              setTall(e.target.scrollHeight > 80);
+            }}
+            rows={2}
+            placeholder="Describe your design..."
+            className="max-h-[140px] min-h-[42px] w-full min-w-0 flex-1 resize-none overflow-y-auto bg-transparent [field-sizing:content] text-[16px] leading-[1.45] text-cocoa outline-none placeholder:text-cocoa-soft tab:min-h-14 [@media(max-height:600px)]:min-h-[30px]"
+          />
+          {p.prompt.length > 0 && (
+            <span className="pointer-events-none absolute right-3 bottom-1 text-[11px] text-cocoa-soft">
+              {p.prompt.length} / {MAX_PROMPT}
+            </span>
           )}
-        </div>
-      </section>
-
-      <QuickAdd quick={p.quick} toggleQuick={p.toggleQuick} />
-
-      {/* describe */}
-      <div className="relative mt-5">
-        <PencilIcon className="pointer-events-none absolute top-[13px] left-4 h-5 w-5 text-cocoa-soft" />
-        <label htmlFor="m-prompt" className="sr-only">
-          Describe your nail design
         </label>
-        <textarea
-          id="m-prompt"
-          ref={textareaRef}
-          value={p.prompt}
-          maxLength={MAX_PROMPT}
-          onChange={(e) => p.setPrompt(e.target.value)}
-          rows={1}
-          placeholder="Describe your design…"
-          className="min-h-[66px] w-full resize-none rounded-[16px] border border-line bg-ivory py-3 pr-4 pb-6 pl-11 [field-sizing:content] text-[16px] text-cocoa outline-none transition placeholder:text-cocoa-soft focus:border-brown-2"
-        />
-        {p.prompt.length > 0 && (
-          <span className="pointer-events-none absolute right-4 bottom-1.5 text-[11px] text-cocoa-soft">
-            {p.prompt.length} / {MAX_PROMPT}
-          </span>
+
+        {p.error && (
+          <p role="alert" className="mt-3 flex-none rounded-xl bg-wine/10 px-4 py-2.5 text-center text-[14px] font-medium text-wine">
+            {p.error}
+          </p>
         )}
+
+        <div className="mt-3 flex flex-none justify-center tab:mt-3.5 [@media(max-height:600px)]:mt-2.5">
+          <button
+            type="submit"
+            disabled={busy}
+            onClick={() => {
+              if (hasPhoto) return;
+              setShake(false);
+              requestAnimationFrame(() => setShake(true)); // restart the shake on every tap
+            }}
+            className="btn-brown flex min-h-12 w-full items-center justify-center gap-2.5 rounded-full px-8 text-[18px] font-semibold whitespace-nowrap text-white shadow-[0_4px_14px_rgba(110,65,42,.25)] transition active:scale-[0.99] disabled:cursor-wait disabled:opacity-80 tab:min-h-[54px] tab:w-auto tab:px-[54px] tab:text-[19px] [@media(max-height:600px)]:min-h-[46px]"
+          >
+            {busy ? (
+              <>
+                <span className="h-6 w-6 animate-spin rounded-full border-[3px] border-white/40 border-t-white" />
+                Designing…
+              </>
+            ) : (
+              <>
+                Generate
+                <SparkleIcon className="h-5 w-5" />
+              </>
+            )}
+          </button>
+        </div>
       </div>
-
-      {p.error && (
-        <p role="alert" className="mt-4 rounded-xl bg-wine/10 px-4 py-3 text-center font-medium text-wine">
-          {p.error}
-        </p>
-      )}
-
-      <button
-        type="submit"
-        disabled={busy}
-        className="btn-brown mx-auto mt-9 flex min-h-[46px] min-w-[192px] items-center justify-center gap-2.5 rounded-full px-8 text-[17px] font-semibold whitespace-nowrap text-white shadow-[0_12px_24px_-10px_rgba(110,65,42,.6)] transition active:scale-[0.99] disabled:cursor-wait disabled:opacity-80"
-      >
-        {busy ? (
-          <>
-            <span className="h-6 w-6 animate-spin rounded-full border-[3px] border-white/40 border-t-white" />
-            Designing…
-          </>
-        ) : (
-          <>
-            Generate
-            <SparkleIcon className="h-5 w-5" />
-          </>
-        )}
-      </button>
     </div>
   );
 }
