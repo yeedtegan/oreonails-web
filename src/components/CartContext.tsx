@@ -30,7 +30,8 @@ type Cart = {
   items: CartItem[];
   /** number of sets / pieces (quantities added up) */
   count: number;
-  add: (item: { id: string; sessionId: string; blob: Blob; price: number }) => void;
+  /** custom design — priced by the store (pricing.pricePerDesign) */
+  add: (item: { id: string; sessionId: string; blob: Blob }) => void;
   addProduct: (product: Product, options?: Partial<LineOptions>) => void;
   update: (id: string, options: Partial<LineOptions>) => void;
   remove: (id: string) => void;
@@ -192,6 +193,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [openRequest, setOpenRequest] = useState<OpenDesignRequest | null>(null);
   const [notes, setNotesState] = useState("");
   const [pricing, setPricing] = useState<PricingRules | null>(null);
+  const pricingRef = useRef(pricing);
   const itemsRef = useRef(items);
   const userIdRef = useRef(userId);
   /** bumped by add/update/remove, so a reload that raced with them reads storage again */
@@ -201,6 +203,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   useLayoutEffect(() => {
     itemsRef.current = items;
     userIdRef.current = userId;
+    pricingRef.current = pricing;
   });
 
   useEffect(() => {
@@ -282,9 +285,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const add = useCallback(
-    (item: { id: string; sessionId: string; blob: Blob; price: number }) => {
+    (item: { id: string; sessionId: string; blob: Blob }) => {
       if (itemsRef.current.some((i) => i.id === item.id)) return;
-      const stored: StoredCartItem = { ...item, kind: "design", quantity: 1, size: null, length: null, addedAt: Date.now(), synced: false };
+      // the store prices it again on sync / at checkout; the cart always shows the store's price (see `shown`)
+      const price = pricingRef.current?.pricePerDesign ?? 0;
+      const stored: StoredCartItem = { ...item, price, kind: "design", quantity: 1, size: null, length: null, addedAt: Date.now(), synced: false };
       put({ ...stored, url: URL.createObjectURL(item.blob) });
       persist(stored, uploadItem);
     },
@@ -363,10 +368,14 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const cart = useMemo<Cart>(() => {
-    const lines = items.map((i) => ({ price: i.price, quantity: lineOptions(i).quantity, isSet: isSet(i) }));
+    // custom designs always cost the store's current price (also ones saved in the cart before a price change)
+    const designPrice = pricing?.pricePerDesign;
+    const shown =
+      designPrice === undefined ? items : items.map((i) => (i.kind !== "product" && i.price !== designPrice ? { ...i, price: designPrice } : i));
+    const lines = shown.map((i) => ({ price: i.price, quantity: lineOptions(i).quantity, isSet: isSet(i) }));
     const totals = priceCart(lines, pricing ?? { tiers: [], shippingFee: 0, freeShippingMin: 0 });
     return {
-      items,
+      items: shown,
       count: lines.reduce((s, l) => s + l.quantity, 0),
       add,
       addProduct,

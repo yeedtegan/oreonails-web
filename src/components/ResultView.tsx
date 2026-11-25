@@ -20,7 +20,7 @@ import {
   SparkleIcon,
   UserIcon,
 } from "./icons";
-import { DESIGN_PRICE, MAX_HISTORY, MAX_PROMPT, QUICK_ADD, QUICK_ADD_CATEGORIES, type QuickAddCategory } from "@/lib/constants";
+import { MAX_HISTORY, MAX_PROMPT, QUICK_ADD, QUICK_ADD_CATEGORIES, type QuickAddCategory } from "@/lib/constants";
 import { GenerationError, startDesign, waitForDesign } from "@/lib/generate";
 import type { StoredMessage, StoredVersion } from "@/lib/designStore";
 import { uid } from "@/lib/uid";
@@ -64,7 +64,6 @@ type Props = {
   onNewPhoto: () => void;
 };
 
-const price = `$${DESIGN_PRICE.toFixed(2)}`;
 const fmtTime = (t: number) => new Date(t).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 
 /** "Today", "Yesterday" or "Nov 19, 2026" */
@@ -143,6 +142,8 @@ export const greeting = (): Message => ({
 
 export default function ResultView({ session, update, initialVersionId, onNewDesign, onNewPhoto }: Props) {
   const cart = useCart();
+  /** price of one custom set, set by the store (GET /api/pricing) */
+  const designPrice = cart.pricing?.pricePerDesign;
   const { versions, messages } = session;
   const [selectedId, setSelectedId] = useState(
     () => versions.find((v) => v.id === initialVersionId)?.id ?? versions[versions.length - 1].id,
@@ -402,7 +403,7 @@ export default function ResultView({ session, update, initialVersionId, onNewDes
 
   function addToCart() {
     if (inCart) return;
-    cart.add({ id: selected.id, sessionId: session.id, blob: selected.blob, price: DESIGN_PRICE });
+    cart.add({ id: selected.id, sessionId: session.id, blob: selected.blob });
     showToast("Added to cart");
   }
 
@@ -475,8 +476,12 @@ export default function ResultView({ session, update, initialVersionId, onNewDes
             >
               <CartIcon className="h-[22px] w-[22px]" />
               {inCart ? "In Cart ✓" : "Add to Cart"}
-              <i className="h-[22px] w-px bg-white/40" aria-hidden />
-              <b className="font-medium">{price}</b>
+              {designPrice !== undefined && (
+                <>
+                  <i className="h-[22px] w-px bg-white/40" aria-hidden />
+                  <b className="font-medium">${designPrice.toFixed(2)}</b>
+                </>
+              )}
             </button>
 
             <button

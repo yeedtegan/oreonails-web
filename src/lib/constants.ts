@@ -48,9 +48,6 @@ export function lineHasStyle(line: string, id: NailStyleId) {
 /** Earlier requests sent with an edit (the most recent ones), so a nail length asked for before is kept. */
 export const MAX_HISTORY = 10;
 
-/** Price of one custom press-on set (USD). */
-export const DESIGN_PRICE = 28;
-
 /** Quick Add details: pick several (list on desktop, tiles on phones), then "Generate" sends them as one edit. */
 export type QuickAddCategory = "glitter" | "bow" | "flower" | "gem" | "charm";
 export const QUICK_ADD_CATEGORIES: { id: QuickAddCategory; label: string; emoji: string }[] = [
