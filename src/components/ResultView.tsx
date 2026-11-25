@@ -165,7 +165,7 @@ export default function ResultView({ session, update, initialVersionId, onNewDes
   const [filter, setFilter] = useState<QuickAddCategory | "all">("all");
   const [toast, setToast] = useState<string | null>(null);
 
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const chatRef = useRef<HTMLDivElement>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => () => clearTimeout(toastTimer.current), []);
@@ -624,22 +624,34 @@ export default function ResultView({ session, update, initialVersionId, onNewDes
               onSubmit={onSend}
               className="flex-none"
             >
-              <div className="mt-2 flex items-center gap-2.5 rounded-full border border-line bg-white py-1.5 pr-2 pl-[18px] soft-shadow focus-within:border-brown tab:mt-3">
-                <button type="button" onClick={onNewPhoto} aria-label="Use a different hand photo" title="Use a different hand photo" className="shrink-0">
+              {/* long requests wrap onto more lines (up to 3 — 3 × 23px + padding = 90px — then it scrolls); the icons stay on the bottom line */}
+              <div className="mt-2 flex items-end gap-2.5 rounded-[28px] border border-line bg-white py-1.5 pr-2 pl-[18px] soft-shadow focus-within:border-brown tab:mt-3">
+                <button type="button" onClick={onNewPhoto} aria-label="Use a different hand photo" title="Use a different hand photo" className="grid h-11 shrink-0 place-items-center">
                   <GalleryIcon className="h-[22px] w-[22px]" />
                 </button>
                 <label htmlFor="refine-input" className="sr-only">
                   Describe a change to your design
                 </label>
-                <input
+                <textarea
                   id="refine-input"
                   ref={inputRef}
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    // keyboard: Enter sends, Shift+Enter adds a line · phones: the return key adds a line, the arrow sends
+                    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && !matchMedia("(pointer: coarse)").matches) {
+                      e.preventDefault();
+                      e.currentTarget.form?.requestSubmit();
+                    }
+                  }}
+                  rows={1}
                   maxLength={MAX_PROMPT}
                   autoComplete="off"
                   placeholder="Type your request to edit the design…"
-                  className="min-h-11 min-w-0 flex-1 bg-transparent text-[16px] outline-none placeholder:text-cocoa-soft"
+                  // empty: one line (a long placeholder must not wrap and grow the box on phones)
+                  className={`max-h-[90px] min-h-11 w-full min-w-0 flex-1 resize-none overflow-y-auto bg-transparent py-2.5 text-[16px] leading-[1.45] outline-none placeholder:text-cocoa-soft ${
+                    input ? "[field-sizing:content]" : "h-11 placeholder:whitespace-nowrap"
+                  }`}
                 />
                 <button type="submit" disabled={!input.trim() || working} aria-label="Send" className="grid h-11 w-11 shrink-0 place-items-center rounded-full disabled:opacity-40">
                   {working ? <span className="h-5 w-5 animate-spin rounded-full border-2 border-line border-t-brown" /> : <SendIcon className="h-[22px] w-[22px]" />}

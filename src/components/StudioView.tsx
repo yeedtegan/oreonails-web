@@ -153,8 +153,6 @@ export default function StudioView({ textareaRef, ...p }: Props) {
   const busy = p.loading;
   /** Generate without a photo: the upload card shakes */
   const [shake, setShake] = useState(false);
-  /** the description runs past 2 lines: the illustration makes room for it */
-  const [tall, setTall] = useState(false);
 
   // app-like screen: no footer under it
   useEffect(() => {
@@ -227,7 +225,7 @@ export default function StudioView({ textareaRef, ...p }: Props) {
               </div>
             ) : (
               <>
-                {!tall && <UploadArt />}
+                <UploadArt />
                 <h2 className="mb-1 text-[clamp(18px,5.2vw,22px)] leading-tight font-semibold text-balance text-brown tab:text-[26px]">
                   Take a photo or upload a photo of your hand
                 </h2>
@@ -248,13 +246,11 @@ export default function StudioView({ textareaRef, ...p }: Props) {
             ref={textareaRef}
             value={p.prompt}
             maxLength={MAX_PROMPT}
-            onChange={(e) => {
-              p.setPrompt(e.target.value);
-              setTall(e.target.scrollHeight > 80);
-            }}
-            rows={2}
+            onChange={(e) => p.setPrompt(e.target.value)}
+            rows={3}
             placeholder="Describe your design..."
-            className="max-h-[140px] min-h-[42px] w-full min-w-0 flex-1 resize-none overflow-y-auto bg-transparent [field-sizing:content] text-[16px] leading-[1.45] text-cocoa outline-none placeholder:text-cocoa-soft tab:min-h-14 [@media(max-height:600px)]:min-h-[30px]"
+            // always 3 lines high (3 × 23px); longer text scrolls inside
+            className="h-[70px] w-full min-w-0 flex-1 resize-none overflow-y-auto bg-transparent text-[16px] leading-[1.45] text-cocoa outline-none placeholder:text-cocoa-soft"
           />
           {p.prompt.length > 0 && (
             <span className="pointer-events-none absolute right-3 bottom-1 text-[11px] text-cocoa-soft">
