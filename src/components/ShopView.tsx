@@ -4,17 +4,18 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useCart } from "./CartContext";
 import { ArrowRightIcon, BagIcon, CloseIcon, FilterIcon, HeartIcon, SearchIcon, SparkleIcon } from "./icons";
+import { flyToCart } from "@/lib/flyToCart";
 import { money } from "@/lib/pricing";
 import {
   CATEGORIES,
   COLLECTIONS,
+  DEFAULT_SIZE,
   LENGTHS,
   SHAPES,
-  SIZES,
   SORTS,
   filterProducts,
   filtersQuery,
-  hasSize,
+  productHref,
   productImage,
   titleCase,
   type Product,
@@ -41,7 +42,7 @@ function subscribeFavorites(cb: () => void) {
     window.removeEventListener("storage", cb);
   };
 }
-function useFavorites() {
+export function useFavorites() {
   const raw = useSyncExternalStore(subscribeFavorites, readFavorites, () => "[]");
   const favs = useMemo<string[]>(() => {
     try {
@@ -240,75 +241,22 @@ function FilterPanel({ f, toggle, clear }: { f: ShopFilters; toggle: Toggle; cle
   );
 }
 
-/** pick size + length, then add (tools go straight in) */
-function AddToCart({ product, onAdded, onClose }: { product: Product; onAdded: (name: string) => void; onClose: () => void }) {
+/** one set in a grid — the photo and name open its page */
+export function ProductCard({ product, favorite, onFavorite }: { product: Product; favorite: boolean; onFavorite: () => void }) {
   const { addProduct } = useCart();
-  const ref = useRef<HTMLDivElement>(null);
-  const lengths = product.lengths.length ? product.lengths : [...LENGTHS];
-  const [size, setSize] = useState<string | null>(null);
-  const [length, setLength] = useState<string | null>(lengths.length === 1 ? lengths[0] : null);
-
-  useEffect(() => {
-    const onDown = (e: PointerEvent) => !ref.current?.contains(e.target as Node) && onClose();
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    document.addEventListener("pointerdown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("pointerdown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [onClose]);
-
-  const chip = (on: boolean) =>
-    `min-w-9 rounded-full border px-2.5 py-1 text-[13px] transition ${on ? "border-brown bg-brown text-white" : "border-line bg-white hover:border-brown"}`;
-
-  return (
-    <div ref={ref} role="dialog" aria-label={`Add ${product.name} to cart`} className="absolute inset-x-2 bottom-2 z-10 rounded-2xl border border-line bg-white p-3 soft-shadow">
-      <p className="text-[12px] font-medium tracking-[0.1em] text-cocoa-soft uppercase">Size</p>
-      <div className="mt-1 flex flex-wrap gap-1">
-        {SIZES.map((s) => (
-          <button key={s} type="button" aria-pressed={size === s} onClick={() => setSize(s)} className={chip(size === s)}>
-            {s}
-          </button>
-        ))}
-      </div>
-      <p className="mt-2 text-[12px] font-medium tracking-[0.1em] text-cocoa-soft uppercase">Length</p>
-      <div className="mt-1 flex flex-wrap gap-1">
-        {lengths.map((l) => (
-          <button key={l} type="button" aria-pressed={length === l} onClick={() => setLength(l)} className={chip(length === l)}>
-            {titleCase(l)}
-          </button>
-        ))}
-      </div>
-      <button
-        type="button"
-        disabled={!size || !length}
-        onClick={() => {
-          addProduct(product, { size, length });
-          onAdded(product.name);
-        }}
-        className="btn-brown btn-label mt-2.5 min-h-10 w-full rounded-full text-[14px] text-white disabled:opacity-50"
-      >
-        {size && length ? "Add to Cart" : "Choose size & length"}
-      </button>
-    </div>
-  );
-}
-
-function ProductCard({ product, favorite, onFavorite, onAdded }: { product: Product; favorite: boolean; onFavorite: () => void; onAdded: (name: string) => void }) {
-  const { addProduct } = useCart();
-  const [picking, setPicking] = useState(false);
   const details = [product.shapes.map(titleCase).join(" / "), product.lengths.map(titleCase).join(" / ")].filter(Boolean).join(" · ");
 
   return (
     <li className="relative rounded-[18px] border border-line bg-ivory px-3.5 pt-2.5 pb-3.5 soft-shadow">
-      {/* eslint-disable-next-line @next/next/no-img-element -- store image through our cached route */}
-      <img
-        src={productImage(product)}
-        alt={`${product.name} press-on nail set`}
-        loading="lazy"
-        className="aspect-[2.5/1] w-full rounded-[10px] object-cover mix-blend-multiply"
-      />
+      <Link href={productHref(product)} aria-label={`View ${product.name}`} className="block">
+        {/* eslint-disable-next-line @next/next/no-img-element -- store image through our cached route */}
+        <img
+          src={productImage(product)}
+          alt={`${product.name} press-on nail set`}
+          loading="lazy"
+          className="aspect-[2.5/1] w-full rounded-[10px] object-cover mix-blend-multiply"
+        />
+      </Link>
       <button
         type="button"
         onClick={onFavorite}
@@ -319,7 +267,7 @@ function ProductCard({ product, favorite, onFavorite, onAdded }: { product: Prod
         <HeartIcon filled={favorite} className={`h-5 w-5 ${favorite ? "text-wine" : ""}`} />
       </button>
       <div className="mt-2.5 flex items-end text-[14px]">
-        <div className="flex-1">
+        <Link href={productHref(product)} className="flex-1">
           {product.name}
           <br />
           <b className="font-medium">{money(product.price)}</b>
@@ -330,32 +278,20 @@ function ProductCard({ product, favorite, onFavorite, onAdded }: { product: Prod
               <span className="text-[12px] text-cocoa-soft">{details}</span>
             </>
           )}
-        </div>
+        </Link>
+        {/* adds right away — size S, the set's own length and shape (changeable in the cart / on its page) — and flies into the cart */}
         <button
           type="button"
           aria-label={`Add ${product.name} to cart`}
-          aria-expanded={picking}
-          onClick={() => {
-            if (!hasSize(product.category)) {
-              addProduct(product);
-              onAdded(product.name);
-            } else setPicking((v) => !v);
+          onClick={(e) => {
+            addProduct(product, { size: DEFAULT_SIZE, length: product.lengths[0] ?? null, shape: product.shapes[0] ?? null });
+            flyToCart(e.currentTarget);
           }}
-          className="grid h-[38px] w-[38px] shrink-0 place-items-center rounded-full bg-brown text-white transition active:scale-95"
+          className="grid h-[38px] w-[38px] shrink-0 place-items-center rounded-full bg-brown text-white"
         >
           <BagIcon className="h-[18px] w-[18px]" />
         </button>
       </div>
-      {picking && (
-        <AddToCart
-          product={product}
-          onClose={() => setPicking(false)}
-          onAdded={(name) => {
-            setPicking(false);
-            onAdded(name);
-          }}
-        />
-      )}
     </li>
   );
 }
@@ -484,7 +420,6 @@ export default function ShopView({ products, initial }: { products: Product[] | 
                     showToast(favs.includes(p.id) ? "Removed from wishlist" : "Saved to wishlist");
                     toggleFav(p.id);
                   }}
-                  onAdded={(name) => showToast(`${name} added to cart`)}
                 />
               ))}
             </ul>

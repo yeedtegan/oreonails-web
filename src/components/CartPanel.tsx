@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useAuth } from "./AuthContext";
 import { isProduct, isSet, lineOptions, useCart, type CartItem } from "./CartContext";
@@ -94,7 +95,8 @@ function CartLine({ item, name, onOpen }: { item: CartItem; name: string; onOpen
   const o = lineOptions(item);
   const max = pricing?.maxQuantity ?? 10;
   const sized = isSet(item);
-  const lengths = item.lengthOptions?.length ? item.lengthOptions : [...LENGTHS];
+  // sets are painted to order: every length can be picked
+  const lengths = [...LENGTHS];
   const chosen = o.size && o.length ? `${o.size}|${o.length}` : "";
   const step = "grid h-9 w-9 place-items-center rounded-full bg-pink-2 text-lg leading-none disabled:opacity-40";
 
@@ -108,7 +110,8 @@ function CartLine({ item, name, onOpen }: { item: CartItem; name: string; onOpen
         <div className="min-w-0">
           <h4 className="truncate text-[16px] font-medium">{name}</h4>
           <p className={`text-[13px] ${sized && !chosen ? "text-wine" : "text-cocoa-soft"}`}>
-            {sized ? (chosen ? `${o.size} / ${titleCase(o.length!)}` : "Choose your size") : "Tool"} · {money(item.price)} / {sized ? "set" : "pc"}
+            {sized ? (chosen ? [o.size, titleCase(o.length!), o.shape && titleCase(o.shape)].filter(Boolean).join(" / ") : "Choose your size") : "Tool"} ·{" "}
+            {money(item.price)} / {sized ? "set" : "pc"}
           </p>
         </div>
         <div className="text-right font-semibold">{money(item.price * o.quantity)}</div>
@@ -232,9 +235,9 @@ export default function CartPanel({ onClose }: { onClose: () => void }) {
             <div className="flex flex-col items-center gap-3 px-2.5 py-[60px] text-center text-cocoa-soft">
               <BagIcon className="h-10 w-10" />
               <p>Your cart is empty.</p>
-              <a href="/shop" className="btn-brown btn-label inline-flex min-h-11 items-center rounded-full px-[22px] text-white">
+              <Link href="/shop" onClick={onClose} className="btn-brown btn-label inline-flex min-h-11 items-center rounded-full px-[22px] text-white">
                 Shop nail sets
-              </a>
+              </Link>
             </div>
           ) : (
             <>

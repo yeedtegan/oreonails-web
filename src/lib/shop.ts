@@ -26,6 +26,8 @@ export const CATEGORIES: { id: ProductCategory; label: string }[] = [
 export const SHAPES = ["almond", "coffin", "square", "oval", "stiletto"] as const;
 export const LENGTHS = ["short", "medium", "long"] as const;
 export const SIZES = ["XS", "S", "M", "L"] as const;
+/** size picked when nothing else was chosen (Shop grid "add", product page start) */
+export const DEFAULT_SIZE = "S";
 
 export type SortId = "featured" | "best" | "newest" | "price-asc" | "price-desc" | "name";
 export const SORTS: { id: SortId; label: string }[] = [
@@ -45,6 +47,9 @@ export const titleCase = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 /** Image URL through this site (cached; ?v changes when the product is updated). */
 export const productImage = (p: Pick<Product, "id" | "updatedAt">) =>
   `/api/products/${encodeURIComponent(p.id)}/image?v=${encodeURIComponent(p.updatedAt)}`;
+
+/** the product's own page */
+export const productHref = (p: Pick<Product, "id">) => `/shop/${encodeURIComponent(p.id)}`;
 
 /** tools have no size / length */
 export const hasSize = (category: ProductCategory | undefined) => category !== "tools";

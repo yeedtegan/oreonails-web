@@ -63,6 +63,8 @@ export type StoredCartItem = {
   quantity?: number;
   size?: string | null;
   length?: string | null;
+  /** nail shape the customer picked (Shop sets); absent = as pictured */
+  shape?: string | null;
   addedAt: number;
   /** already saved in the signed-in customer's account cart (false/absent = not uploaded yet, e.g. a guest item) */
   synced?: boolean;

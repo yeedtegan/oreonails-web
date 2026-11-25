@@ -20,8 +20,8 @@ import { useAuth } from "./AuthContext";
 
 export type CartItem = StoredCartItem & { url: string };
 
-/** quantity / size / length of a cart line */
-export type LineOptions = { quantity: number; size: string | null; length: string | null };
+/** quantity / size / length / shape of a cart line */
+export type LineOptions = { quantity: number; size: string | null; length: string | null; shape: string | null };
 
 /** "show this design again" — handled by the studio, which reopens the session + chat */
 export type OpenDesignRequest = { sessionId: string; versionId: string; fallback: Blob; nonce: number };
@@ -46,10 +46,19 @@ type Cart = {
 
 const CartContext = createContext<Cart | null>(null);
 
+/** window event that opens the cart panel (the header listens) */
+export const OPEN_CART_EVENT = "oreo:open-cart";
+export const openCart = () => window.dispatchEvent(new Event(OPEN_CART_EVENT));
+
 const MAX_QUANTITY = 10;
 export const productLineId = (productId: string) => `product-${productId}`;
 export const isProduct = (i: StoredCartItem) => i.kind === "product";
-export const lineOptions = (i: { quantity?: number; size?: string | null; length?: string | null }): LineOptions => ({ quantity: i.quantity ?? 1, size: i.size ?? null, length: i.length ?? null });
+export const lineOptions = (i: { quantity?: number; size?: string | null; length?: string | null; shape?: string | null }): LineOptions => ({
+  quantity: i.quantity ?? 1,
+  size: i.size ?? null,
+  length: i.length ?? null,
+  shape: i.shape ?? null,
+});
 /** counts toward "x sets get y free" (tools don't) */
 export const isSet = (i: StoredCartItem) => !isProduct(i) || hasSize(i.category as ProductCategory);
 
@@ -76,6 +85,7 @@ async function uploadItem(item: StoredCartItem): Promise<boolean> {
     form.append("quantity", String(o.quantity));
     if (o.size) form.append("size", o.size);
     if (o.length) form.append("length", o.length);
+    if (o.shape) form.append("shape", o.shape);
     res = await fetch(`/api/cart/${encodeURIComponent(item.id)}`, { method: "PUT", body: form }).catch(() => null);
   }
   return !!res?.ok;
@@ -93,7 +103,7 @@ const deleteRemote = (item: StoredCartItem) =>
     method: "DELETE",
   }).catch(() => {});
 
-const sameOptions = (a: LineOptions, b: LineOptions) => a.quantity === b.quantity && a.size === b.size && a.length === b.length;
+const sameOptions = (a: LineOptions, b: LineOptions) => a.quantity === b.quantity && a.size === b.size && a.length === b.length && a.shape === b.shape;
 
 /**
  * Bring the local cart (IndexedDB) in line with the account:
@@ -316,6 +326,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         quantity: Math.min(MAX_QUANTITY, options.quantity ?? 1),
         size: sized ? (options.size ?? null) : null,
         length: sized ? (options.length ?? product.lengths[0] ?? null) : null,
+        shape: sized ? (options.shape ?? product.shapes[0] ?? null) : null,
         addedAt: Date.now(),
         synced: false,
       };

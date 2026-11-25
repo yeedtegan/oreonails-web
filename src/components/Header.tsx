@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCart } from "./CartContext";
+import { OPEN_CART_EVENT, useCart } from "./CartContext";
 import { useCallback, useEffect, useState } from "react";
 import CartPanel from "./CartPanel";
 import AccountMenu from "./AccountMenu";
@@ -78,6 +78,12 @@ export default function Header({ active }: { active: NavId }) {
   const cartCount = useCart().count;
   const [cartOpen, setCartOpen] = useState(false);
   const closeCart = useCallback(() => setCartOpen(false), []);
+  // other parts of the page can open the cart (e.g. "Buy it now" on a product page)
+  useEffect(() => {
+    const open = () => setCartOpen(true);
+    window.addEventListener(OPEN_CART_EVENT, open);
+    return () => window.removeEventListener(OPEN_CART_EVENT, open);
+  }, []);
   const round = "relative grid h-11 w-11 shrink-0 place-items-center rounded-full text-cocoa transition";
   const soft = `${round} bg-white soft-shadow hover:bg-ivory`;
 

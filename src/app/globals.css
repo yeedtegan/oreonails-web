@@ -210,6 +210,13 @@ body {
   }
 }
 
+/* product page on phones (ProductView toggles body.on-pdp): the footer clears the fixed "Add to Cart" bar */
+@media (max-width: 819.98px) {
+  body.on-pdp footer {
+    padding-bottom: 90px;
+  }
+}
+
 /* custom-nail start screen (StudioView toggles body.studio-start): an app-like screen, no footer under it */
 body.studio-start footer {
   display: none;

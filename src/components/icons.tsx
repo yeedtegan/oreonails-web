@@ -339,3 +339,15 @@ export const CrownOutlineIcon = (p: P) => (
     <path d="M5.5 21h13" />
   </svg>
 );
+
+export const MinusIcon = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M5 12h14" />
+  </svg>
+);
+
+export const PlusIcon = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M12 5v14M5 12h14" />
+  </svg>
+);
