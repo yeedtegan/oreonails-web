@@ -39,7 +39,7 @@ export function Logo({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
   return (
     <Link href="/" className="block shrink-0" aria-label="Oreo Nails home">
       {/* eslint-disable-next-line @next/next/no-img-element -- small static logo */}
-      <img src="/brand/logo.png" alt="Oreo Nails — Custom nail design" width={255} height={93} className={`${h} w-auto`} />
+      <img src="/brand/logo.png" alt="Oreo Nails — Custom nail design" width={716} height={280} className={`${h} w-auto`} />
     </Link>
   );
 }
