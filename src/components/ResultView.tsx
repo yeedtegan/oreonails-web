@@ -21,6 +21,7 @@ import {
   UserIcon,
 } from "./icons";
 import { MAX_HISTORY, MAX_PROMPT, QUICK_ADD, QUICK_ADD_CATEGORIES, type QuickAddCategory } from "@/lib/constants";
+import { pickedQuick, toggleQuickLine } from "@/lib/quickAdd";
 import { GenerationError, startDesign, waitForDesign } from "@/lib/generate";
 import type { StoredMessage, StoredVersion } from "@/lib/designStore";
 import { uid } from "@/lib/uid";
@@ -161,8 +162,6 @@ export default function ResultView({ session, update, initialVersionId, onNewDes
   const [lightbox, setLightbox] = useState(false);
   /** which panel shows in the middle column (phones: under the design) */
   const [tab, setTab] = useState<Tab>("chat");
-  /** Quick Add details picked for the next "Generate" */
-  const [picked, setPicked] = useState<string[]>([]);
   const [filter, setFilter] = useState<QuickAddCategory | "all">("all");
   const [toast, setToast] = useState<string | null>(null);
 
@@ -304,7 +303,9 @@ export default function ResultView({ session, update, initialVersionId, onNewDes
     toastTimer.current = setTimeout(() => setToast(null), 2200);
   }
 
-  const togglePick = (id: string) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
+  // Quick Add: picking a detail adds its prompt to the chat box as its own line (picking again removes it)
+  const picked = pickedQuick(input);
+  const togglePick = (id: string) => setInput((text) => toggleQuickLine(text, id));
 
   async function edit(text: string, baseId: string) {
     const base = versions.find((v) => v.id === baseId) ?? selected;
@@ -364,14 +365,13 @@ export default function ResultView({ session, update, initialVersionId, onNewDes
     edit(text, selected.id);
   }
 
-  /** the picked Quick Add details as one edit */
+  /** Quick Add "Generate": sends what is in the chat box (the picked details, plus anything typed) */
   function generatePicked() {
     if (working) return;
-    if (!picked.length) return showToast("Pick at least one detail");
-    const parts = QUICK_ADD.filter((q) => picked.includes(q.id)).map((q) => q.text);
-    const text = parts.join(", ");
-    send(text.charAt(0).toUpperCase() + text.slice(1));
-    setPicked([]);
+    const text = input.trim();
+    if (!text) return showToast("Pick at least one detail");
+    setInput("");
+    send(text);
     setTab("chat");
   }
 
