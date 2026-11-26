@@ -18,6 +18,7 @@ import {
   type StoredSession,
 } from "@/lib/designStore";
 import { ACCEPTED_TYPES, MAX_FILE_BYTES, MAX_PROMPT, QUICK_ADD } from "@/lib/constants";
+import { track } from "@/lib/metaPixel";
 import { uid } from "@/lib/uid";
 
 function toStored(s: DesignSession): StoredSession {
@@ -47,13 +48,17 @@ function fromStored(s: StoredSession): DesignSession {
 
 const revokeUrls = (s: DesignSession) => s.versions.forEach((v) => URL.revokeObjectURL(v.url));
 
+/** a Quick Add detail as a description line: "add pearls" → "Add pearls" */
+const quickLine = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
+/** is this description line that detail (ignoring case, spaces, a leading "-" and a trailing "." / ",") */
+const isQuickLine = (line: string, text: string) =>
+  line.trim().replace(/^[-•*]\s*/, "").replace(/[.,;]+$/, "").trim().toLowerCase() === text.toLowerCase();
+
 export default function NailStudio() {
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const [styles, setStyles] = useState<NailStyleId[]>([]);
-  // Quick Add details picked on the upload screen (added to the description when generating)
-  const [quick, setQuick] = useState<string[]>([]);
   const [prompt, setPrompt] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -206,8 +211,21 @@ export default function NailStudio() {
     pickFile(e.dataTransfer.files?.[0]);
   }
 
+  // Quick Add: picking a detail writes its prompt into the description as its own line; un-picking removes that line.
+  // A tile shows as picked while its line is in the description (so deleting the line by hand un-picks it too).
+  const quick = QUICK_ADD.filter((q) => prompt.split("\n").some((l) => isQuickLine(l, q.text))).map((q) => q.id);
+
   function toggleQuick(id: string) {
-    setQuick((q) => (q.includes(id) ? q.filter((x) => x !== id) : [...q, id]));
+    const item = QUICK_ADD.find((q) => q.id === id);
+    if (!item) return;
+    setPrompt((text) => {
+      const lines = text.split("\n");
+      if (lines.some((l) => isQuickLine(l, item.text))) {
+        return lines.filter((l) => !isQuickLine(l, item.text)).join("\n").replace(/^\s+|\s+$/g, "");
+      }
+      const body = text.replace(/\s+$/, "");
+      return (body ? `${body}\n${quickLine(item.text)}` : quickLine(item.text)).slice(0, MAX_PROMPT);
+    });
   }
 
   async function onSubmit(e: FormEvent) {
@@ -216,8 +234,7 @@ export default function NailStudio() {
       setError("Upload a photo of your hand first so we can fit the design to your nails.");
       return;
     }
-    const details = QUICK_ADD.filter((q) => quick.includes(q.id)).map((q) => q.text);
-    const request = [prompt.trim(), details.join(", ")].filter(Boolean).join(". ").slice(0, MAX_PROMPT);
+    const request = prompt.trim();
     if (!request && styles.length === 0) {
       setError("Describe your design or pick something from Quick Add.");
       focusPrompt();
@@ -226,6 +243,7 @@ export default function NailStudio() {
     setError(null);
     setGenError(null);
     setLoading(true);
+    track("CustomizeProduct", { content_name: "Custom nail design", content_type: "product" });
     const token = photoToken.current;
     let jobId: string;
     try {

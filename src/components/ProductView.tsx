@@ -6,6 +6,7 @@ import { openCart, useCart } from "./CartContext";
 import { ProductCard, useFavorites } from "./ShopView";
 import { BagIcon, ChevronDownIcon, ChevronRightIcon, GiftIcon, HeartIcon, MinusIcon, PencilIcon, PlusIcon, SparkleIcon, ToolIcon, TruckIcon } from "./icons";
 import { flyToCart } from "@/lib/flyToCart";
+import { productParams, track } from "@/lib/metaPixel";
 import { money } from "@/lib/pricing";
 import { CATEGORIES, DEFAULT_SIZE, LENGTHS, SHAPES, SIZES, hasSize, productImage, titleCase, type Product } from "@/lib/shop";
 
@@ -69,6 +70,10 @@ export default function ProductView({ product: p, related }: { product: Product;
     return () => document.body.classList.remove("on-pdp");
   }, []);
   useEffect(() => () => clearTimeout(toastTimer.current), []);
+  // Meta Pixel: product page seen (the store sells in USD; pricing may still be loading)
+  useEffect(() => {
+    track("ViewContent", productParams(p, "usd"));
+  }, [p]);
 
   function showToast(text: string) {
     setToast(text);
@@ -93,6 +98,7 @@ export default function ProductView({ product: p, related }: { product: Product;
       type="button"
       onClick={() => {
         showToast(fav ? "Removed from wishlist" : "Saved to wishlist");
+        if (!fav) track("AddToWishlist", productParams(p, pricing?.currency));
         toggleFav(p.id);
       }}
       aria-pressed={fav}
@@ -320,6 +326,7 @@ export default function ProductView({ product: p, related }: { product: Product;
                 favorite={favs.includes(r.id)}
                 onFavorite={() => {
                   showToast(favs.includes(r.id) ? "Removed from wishlist" : "Saved to wishlist");
+                  if (!favs.includes(r.id)) track("AddToWishlist", productParams(r, pricing?.currency));
                   toggleFav(r.id);
                 }}
               />

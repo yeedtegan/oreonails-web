@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Pacifico, Poppins } from "next/font/google";
 import "./globals.css";
+import MetaPixel from "@/components/MetaPixel";
 
 /** the whole site: Poppins (light italic for display headings) */
 const poppins = Poppins({
@@ -26,7 +27,11 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={`${poppins.variable} ${pacifico.variable} h-full antialiased`}>
-      <body className="relative min-h-full font-body text-[15px] leading-normal">{children}</body>
+      <body className="relative min-h-full font-body text-[15px] leading-normal">
+        {children}
+        {/* ads tracking — only when NEXT_PUBLIC_META_PIXEL_ID is set */}
+        <MetaPixel />
+      </body>
     </html>
   );
 }

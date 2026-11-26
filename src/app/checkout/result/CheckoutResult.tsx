@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Logo } from "@/components/Header";
 import { deleteCartItem } from "@/lib/designStore";
+import { pixelCurrency, track } from "@/lib/metaPixel";
 
 type Order = {
   id: string;
@@ -12,7 +13,7 @@ type Order = {
   total: number;
   currency: string;
   purchaseUrl: string | null;
-  items: { designId: string; price: number }[];
+  items: { designId?: string; productId?: string; price: number; quantity?: number }[];
 };
 
 type View =
@@ -23,6 +24,31 @@ type View =
 const POLL_MS = 3000;
 /** Whop's webhook usually lands within seconds; after this, say it's still being confirmed. */
 const PATIENCE_MS = 2 * 60 * 1000;
+
+/** Meta Pixel Purchase — once per order in this browser (reloading the page doesn't count it again; the order id
+ *  as eventID also lets Meta drop a repeat) */
+function trackPurchase(order: Order) {
+  const key = `oreo-pixel-purchase-${order.id}`;
+  try {
+    if (localStorage.getItem(key)) return;
+    localStorage.setItem(key, "1");
+  } catch {
+    // storage blocked: still send it; the eventID keeps it from counting twice
+  }
+  const ids = order.items.map((i) => i.productId ?? i.designId ?? "").filter(Boolean);
+  track(
+    "Purchase",
+    {
+      content_ids: ids,
+      content_type: "product",
+      contents: order.items.map((i) => ({ id: i.productId ?? i.designId ?? "item", quantity: i.quantity ?? 1, item_price: i.price })),
+      num_items: order.items.reduce((n, i) => n + (i.quantity ?? 1), 0),
+      value: order.total,
+      currency: pixelCurrency(order.currency),
+    },
+    order.id,
+  );
+}
 
 const money = (n: number, currency: string) =>
   new Intl.NumberFormat("en-US", { style: "currency", currency: currency.toUpperCase() }).format(n);
@@ -52,7 +78,8 @@ export default function CheckoutResult() {
           const order = data.order;
           if (order.status === "paid") {
             // paid: these designs are now an order, take them out of the cart
-            await Promise.all(order.items.map((i) => deleteCartItem(i.designId).catch(() => {})));
+            await Promise.all(order.items.map((i) => i.designId && deleteCartItem(i.designId).catch(() => {})));
+            trackPurchase(order);
           }
           setView({ kind: "order", order, waitedTooLong: Date.now() - started > PATIENCE_MS });
           if (order.status !== "pending") return;

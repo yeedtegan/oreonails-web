@@ -15,6 +15,7 @@ import {
   type StoredCartItem,
 } from "@/lib/designStore";
 import { priceCart, type CartTotals, type PricingRules } from "@/lib/pricing";
+import { pixelCurrency, track } from "@/lib/metaPixel";
 import { hasSize, productImage, type Product, type ProductCategory } from "@/lib/shop";
 import { useAuth } from "./AuthContext";
 
@@ -292,6 +293,14 @@ export function CartProvider({ children }: { children: ReactNode }) {
       const stored: StoredCartItem = { ...item, price, kind: "design", quantity: 1, size: null, length: null, addedAt: Date.now(), synced: false };
       put({ ...stored, url: URL.createObjectURL(item.blob) });
       persist(stored, uploadItem);
+      track("AddToCart", {
+        content_ids: [item.id],
+        content_name: "Custom nail design",
+        content_type: "product",
+        contents: [{ id: item.id, quantity: 1, item_price: price }],
+        value: price,
+        currency: pixelCurrency(pricingRef.current?.currency),
+      });
     },
     [put, persist],
   );
@@ -314,6 +323,15 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   const addProduct = useCallback(
     (product: Product, options: Partial<LineOptions> = {}) => {
+      const quantity = options.quantity ?? 1;
+      track("AddToCart", {
+        content_ids: [product.id],
+        content_name: product.name,
+        content_type: "product",
+        contents: [{ id: product.id, quantity, item_price: product.price }],
+        value: Math.round(product.price * quantity * 100) / 100,
+        currency: pixelCurrency(pricingRef.current?.currency),
+      });
       const id = productLineId(product.id);
       const cur = itemsRef.current.find((i) => i.id === id);
       if (cur) return update(id, { ...options, quantity: lineOptions(cur).quantity + (options.quantity ?? 1) });

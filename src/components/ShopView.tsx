@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "reac
 import { useCart } from "./CartContext";
 import { ArrowRightIcon, BagIcon, CloseIcon, FilterIcon, HeartIcon, SearchIcon, SparkleIcon } from "./icons";
 import { flyToCart } from "@/lib/flyToCart";
+import { productParams, track } from "@/lib/metaPixel";
 import { money } from "@/lib/pricing";
 import {
   CATEGORIES,
@@ -303,6 +304,7 @@ export default function ShopView({ products, initial }: { products: Product[] | 
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const { favs, toggle: toggleFav } = useFavorites();
+  const { pricing } = useCart();
 
   // keep the URL in step, so refresh / share shows the same list
   useEffect(() => {
@@ -310,6 +312,10 @@ export default function ShopView({ products, initial }: { products: Product[] | 
     if (url !== window.location.pathname + window.location.search) window.history.replaceState(window.history.state, "", url);
   }, [f]);
   useEffect(() => () => clearTimeout(toastTimer.current), []);
+  // Meta Pixel: a search from the header (/shop?q=…)
+  useEffect(() => {
+    if (initial.q) track("Search", { search_string: initial.q });
+  }, [initial.q]);
 
   const list = useMemo(() => (products ? filterProducts(products, f) : []), [products, f]);
 
@@ -418,6 +424,7 @@ export default function ShopView({ products, initial }: { products: Product[] | 
                   favorite={favs.includes(p.id)}
                   onFavorite={() => {
                     showToast(favs.includes(p.id) ? "Removed from wishlist" : "Saved to wishlist");
+                    if (!favs.includes(p.id)) track("AddToWishlist", productParams(p, pricing?.currency));
                     toggleFav(p.id);
                   }}
                 />

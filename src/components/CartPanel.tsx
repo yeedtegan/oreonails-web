@@ -8,6 +8,7 @@ import GoogleSignInButton from "./GoogleSignInButton";
 import { Logo } from "./Header";
 import { ArrowRightIcon, BagIcon, ChevronDownIcon, ChevronLeftIcon, CloseIcon, GiftIcon, LockIcon, NoteIcon, TrashIcon, TruckIcon } from "./icons";
 import { money, nextTier } from "@/lib/pricing";
+import { pixelCurrency, track } from "@/lib/metaPixel";
 import { LENGTHS, SIZES, titleCase } from "@/lib/shop";
 
 const MAX_NOTES = 500;
@@ -185,6 +186,14 @@ export default function CartPanel({ onClose }: { onClose: () => void }) {
     if (!user) return setStep("signin");
     setBusy(true);
     setError("");
+    track("InitiateCheckout", {
+      content_ids: cart.items.map((i) => i.productId ?? i.id),
+      content_type: "product",
+      contents: cart.items.map((i) => ({ id: i.productId ?? i.id, quantity: lineOptions(i).quantity, item_price: i.price })),
+      num_items: cart.count,
+      value: cart.totals.total,
+      currency: pixelCurrency(cart.pricing?.currency),
+    });
     try {
       window.location.assign(await startCheckout(cart.items, cart.notes));
     } catch (err) {
