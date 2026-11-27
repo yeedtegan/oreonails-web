@@ -2,7 +2,8 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 
-export type User = { id: string; email: string; name: string; picture: string | null };
+/** role "admin" = can open /admin (shop management) */
+export type User = { id: string; email: string; name: string; picture: string | null; role?: "user" | "admin" };
 
 type Auth = {
   user: User | null;

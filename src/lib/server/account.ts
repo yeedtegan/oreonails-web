@@ -11,7 +11,7 @@ const API_TOKEN = process.env.IMAGE_API_TOKEN ?? "";
 
 export const SESSION_COOKIE = "oreo_session";
 
-export type PublicUser = { id: string; email: string; name: string; picture: string | null };
+export type PublicUser = { id: string; email: string; name: string; picture: string | null; role?: "user" | "admin" };
 
 export async function getSessionToken(): Promise<string | undefined> {
   return (await cookies()).get(SESSION_COOKIE)?.value;

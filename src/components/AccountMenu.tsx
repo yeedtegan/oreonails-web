@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "./AuthContext";
 import GoogleSignInButton from "./GoogleSignInButton";
@@ -50,6 +51,11 @@ export default function AccountMenu({ className = "" }: { className?: string }) 
                 <p className="truncate font-semibold text-cocoa">{user.name}</p>
                 <p className="truncate text-sm text-cocoa-soft">{user.email}</p>
               </div>
+              {user.role === "admin" && (
+                <Link href="/admin" onClick={() => setOpen(false)} className="btn-brown btn-label rounded-full px-4 py-2 text-center text-[15px] text-white">
+                  Shop admin
+                </Link>
+              )}
               <button
                 type="button"
                 onClick={async () => {

@@ -1,6 +1,8 @@
 /** Shop (ready-made sets) — products live on oreonails-api (GET /products), imported with `npm run products`. */
 
-export type ProductCategory = "press-on" | "toenails" | "bundles" | "tools";
+/** id of a category in the store (press-on, toenails, … or one added from /admin) */
+export type ProductCategory = string;
+export type Category = { id: string; label: string };
 
 export type Product = {
   id: string;
@@ -17,7 +19,8 @@ export type Product = {
   updatedAt: string;
 };
 
-export const CATEGORIES: { id: ProductCategory; label: string }[] = [
+/** the store's built-in categories — used when the store's list can't be loaded (more can be added in /admin) */
+export const CATEGORIES: Category[] = [
   { id: "press-on", label: "Press On Nails" },
   { id: "toenails", label: "Toenails" },
   { id: "bundles", label: "Bundles" },
@@ -51,6 +54,9 @@ export const productImage = (p: Pick<Product, "id" | "updatedAt">) =>
 /** the product's own page */
 export const productHref = (p: Pick<Product, "id">) => `/shop/${encodeURIComponent(p.id)}`;
 
+/** label of a category id ("charms" → "Charms" when it isn't in the list) */
+export const categoryLabel = (id: string, categories: Category[] = CATEGORIES) => categories.find((c) => c.id === id)?.label ?? titleCase(id.replace(/-/g, " "));
+
 /** tools have no size / length */
 export const hasSize = (category: ProductCategory | undefined) => category !== "tools";
 
@@ -69,11 +75,11 @@ const many = (v: string | string[] | undefined) =>
   (Array.isArray(v) ? v : v ? [v] : []).flatMap((s) => s.split(",")).map((s) => s.trim().toLowerCase()).filter(Boolean);
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v)?.trim() ?? "";
 
-/** URL query → filters (unknown values dropped) */
-export function parseFilters(p: Params): ShopFilters {
+/** URL query → filters (unknown values dropped; categories = the store's list) */
+export function parseFilters(p: Params, categories: Category[] = CATEGORIES): ShopFilters {
   const sort = one(p.sort) as SortId;
   return {
-    categories: many(p.category).filter((c): c is ProductCategory => CATEGORIES.some((x) => x.id === c)),
+    categories: many(p.category).filter((c) => categories.some((x) => x.id === c)),
     shapes: many(p.shape).filter((s) => (SHAPES as readonly string[]).includes(s)),
     lengths: many(p.length).filter((s) => (LENGTHS as readonly string[]).includes(s)),
     collection: one(p.collection).toLowerCase() || null,

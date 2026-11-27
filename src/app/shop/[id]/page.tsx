@@ -3,8 +3,8 @@ import { notFound } from "next/navigation";
 import { cache } from "react";
 import SiteShell from "@/components/SiteShell";
 import ProductView from "@/components/ProductView";
-import { getProducts } from "@/lib/server/products";
-import type { Product } from "@/lib/shop";
+import { getCategories, getProducts } from "@/lib/server/products";
+import { categoryLabel, type Product } from "@/lib/shop";
 
 type Props = { params: Promise<{ id: string }> };
 
@@ -34,11 +34,16 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 /** /shop/<product id> — one set: photo, options, add to cart, details, related sets */
 export default async function ProductPage({ params }: Props) {
-  const { product, products } = await load(params);
+  const [{ product, products }, categories] = await Promise.all([load(params), getCategories()]);
   if (!product) notFound();
   return (
     <SiteShell active="shop">
-      <ProductView key={product.id} product={product} related={related(product, products ?? [])} />
+      <ProductView
+        key={product.id}
+        product={product}
+        category={{ id: product.category, label: categoryLabel(product.category, categories) }}
+        related={related(product, products ?? [])}
+      />
     </SiteShell>
   );
 }

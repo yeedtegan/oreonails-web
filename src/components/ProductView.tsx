@@ -8,7 +8,7 @@ import { BagIcon, ChevronDownIcon, ChevronRightIcon, GiftIcon, HeartIcon, MinusI
 import { flyToCart } from "@/lib/flyToCart";
 import { productParams, track } from "@/lib/metaPixel";
 import { money } from "@/lib/pricing";
-import { CATEGORIES, DEFAULT_SIZE, LENGTHS, SHAPES, SIZES, hasSize, productImage, titleCase, type Product } from "@/lib/shop";
+import { DEFAULT_SIZE, LENGTHS, SHAPES, SIZES, hasSize, productImage, titleCase, type Category, type Product } from "@/lib/shop";
 
 /** little nail outlines for the shape pills (12 × 20) */
 const SHAPE_PATHS: Record<string, string> = {
@@ -19,7 +19,8 @@ const SHAPE_PATHS: Record<string, string> = {
   stiletto: "M6 0C3 6 1 12 1 19h10C11 12 9 6 6 0z",
 };
 
-const SUBTITLE: Record<Product["category"], string> = {
+/** line under the name; categories added later get the nail-set line */
+const SUBTITLE: Record<string, string> = {
   "press-on": "Hand-painted press-on nails · 24 nails per set",
   toenails: "Hand-painted press-on toenails",
   bundles: "A bundle of hand-painted sets",
@@ -43,7 +44,7 @@ function Accordion({ title, open, children }: { title: string; open?: boolean; c
 }
 
 /** One set: photo · name, price, shape / length / size, quantity, add to cart · details · related sets. */
-export default function ProductView({ product: p, related }: { product: Product; related: Product[] }) {
+export default function ProductView({ product: p, category, related }: { product: Product; category: Category; related: Product[] }) {
   const { addProduct, pricing } = useCart();
   const { favs, toggle: toggleFav } = useFavorites();
   const sized = hasSize(p.category);
@@ -59,7 +60,6 @@ export default function ProductView({ product: p, related }: { product: Product;
   const fav = favs.includes(p.id);
   const maxQty = pricing?.maxQuantity ?? 10;
   const off = p.compareAtPrice && p.compareAtPrice > p.price ? Math.round((1 - p.price / p.compareAtPrice) * 100) : 0;
-  const category = CATEGORIES.find((c) => c.id === p.category);
   const tiers = pricing?.tiers ?? [];
   const firstTier = tiers[0];
   const lastTier = tiers.at(-1);
@@ -145,7 +145,7 @@ export default function ProductView({ product: p, related }: { product: Product;
         {/* info */}
         <div>
           <h1 className="mt-1 mb-1.5 text-[clamp(28px,3vw,38px)] leading-[1.15] font-medium">{p.name}</h1>
-          <p className="mb-3.5 text-[14px] text-cocoa-soft">{SUBTITLE[p.category]}</p>
+          <p className="mb-3.5 text-[14px] text-cocoa-soft">{SUBTITLE[p.category] ?? (sized ? "Hand-painted press-on nails" : category.label)}</p>
           <div className="flex flex-wrap items-baseline gap-2.5">
             <b className="text-[28px] font-semibold">{money(p.price)}</b>
             {off > 0 && (

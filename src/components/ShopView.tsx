@@ -8,7 +8,7 @@ import { flyToCart } from "@/lib/flyToCart";
 import { productParams, track } from "@/lib/metaPixel";
 import { money } from "@/lib/pricing";
 import {
-  CATEGORIES,
+  categoryLabel,
   COLLECTIONS,
   DEFAULT_SIZE,
   LENGTHS,
@@ -19,6 +19,7 @@ import {
   productHref,
   productImage,
   titleCase,
+  type Category,
   type Product,
   type ShopFilters,
   type SortId,
@@ -210,9 +211,9 @@ function Hero({ products }: { products: Product[] | null }) {
 
 type Toggle = (key: "categories" | "shapes" | "lengths", value: string) => void;
 
-function FilterPanel({ f, toggle, clear }: { f: ShopFilters; toggle: Toggle; clear: () => void }) {
+function FilterPanel({ f, toggle, clear, categories }: { f: ShopFilters; toggle: Toggle; clear: () => void; categories: Category[] }) {
   const groups: { title: string; key: "categories" | "shapes" | "lengths"; options: { id: string; label: string }[]; on: string[] }[] = [
-    { title: "Category", key: "categories", options: CATEGORIES, on: f.categories },
+    { title: "Category", key: "categories", options: categories, on: f.categories },
     { title: "Shape", key: "shapes", options: SHAPES.map((s) => ({ id: s, label: titleCase(s) })), on: f.shapes },
     { title: "Length", key: "lengths", options: LENGTHS.map((l) => ({ id: l, label: titleCase(l) })), on: f.lengths },
   ];
@@ -298,7 +299,7 @@ export function ProductCard({ product, favorite, onFavorite }: { product: Produc
 }
 
 /** Shop: banner, filters (sidebar; a toggle on phones), sort, product grid. Filters live in the URL. */
-export default function ShopView({ products, initial }: { products: Product[] | null; initial: ShopFilters }) {
+export default function ShopView({ products, categories, initial }: { products: Product[] | null; categories: Category[]; initial: ShopFilters }) {
   const [f, setF] = useState(initial);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -333,7 +334,7 @@ export default function ShopView({ products, initial }: { products: Product[] | 
       : f.best
         ? "Best Sellers"
         : f.categories.length === 1
-          ? CATEGORIES.find((c) => c.id === f.categories[0])!.label
+          ? categoryLabel(f.categories[0], categories)
           : "All Products";
 
   function showToast(text: string) {
@@ -355,7 +356,7 @@ export default function ShopView({ products, initial }: { products: Product[] | 
             filtersOpen ? "block" : "hidden"
           }`}
         >
-          <FilterPanel f={f} toggle={toggle} clear={clear} />
+          <FilterPanel f={f} toggle={toggle} clear={clear} categories={categories} />
         </aside>
 
         <section aria-labelledby="shop-title" className="min-w-0">
