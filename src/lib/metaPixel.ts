@@ -3,10 +3,12 @@
 /**
  * Meta (Facebook) Pixel — standard events for ads tracking.
  * The pixel only loads when NEXT_PUBLIC_META_PIXEL_ID is set (see MetaPixel.tsx); without it every call here is a no-op.
+ * Several pixels: comma-separated ids ("111,222") — each one is initialised and every event goes to all of them.
  * No personal data is sent: only product ids, names, quantities and prices.
  */
 
-export const META_PIXEL_ID = process.env.NEXT_PUBLIC_META_PIXEL_ID ?? "";
+/** pixel ids from NEXT_PUBLIC_META_PIXEL_ID ("111" or "111,222"); only digits are kept */
+export const META_PIXEL_IDS = [...new Set((process.env.NEXT_PUBLIC_META_PIXEL_ID ?? "").split(/[\s,]+/).filter((id) => /^\d+$/.test(id)))];
 
 type Fbq = (command: "track" | "trackCustom", event: string, params?: Record<string, unknown>, options?: { eventID?: string }) => void;
 
@@ -35,7 +37,7 @@ export type PixelParams = {
  * the same event from the Conversions API on the server).
  */
 export function track(event: PixelEvent, params?: PixelParams, eventID?: string) {
-  if (!META_PIXEL_ID || typeof window === "undefined" || !window.fbq) return;
+  if (!META_PIXEL_IDS.length || typeof window === "undefined" || !window.fbq) return;
   try {
     window.fbq("track", event, params, eventID ? { eventID } : undefined);
   } catch {
