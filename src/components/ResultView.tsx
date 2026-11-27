@@ -22,6 +22,7 @@ import {
 } from "./icons";
 import { MAX_HISTORY, MAX_PROMPT, QUICK_ADD, QUICK_ADD_CATEGORIES, type QuickAddCategory } from "@/lib/constants";
 import { pickedQuick, toggleQuickLine } from "@/lib/quickAdd";
+import { AttachButton, RefGrid, RefStrip, useRefPhotos } from "./RefPhotos";
 import { GenerationError, startDesign, waitForDesign } from "@/lib/generate";
 import type { StoredMessage, StoredVersion } from "@/lib/designStore";
 import { uid } from "@/lib/uid";
@@ -105,7 +106,7 @@ export async function followEdit(msg: Message & { jobId: string }, update: Sessi
       id,
       blob,
       url: URL.createObjectURL(blob),
-      instruction: msg.retry?.text ?? "",
+      instruction: msg.retry?.text || (msg.retry?.refs?.length ? "Design from reference photos" : ""),
       baseId: msg.retry?.baseId,
       favorite: false,
       createdAt: Date.now(),
@@ -160,6 +161,11 @@ export default function ResultView({ session, update, initialVersionId, onNewDes
     if (versions.length > versionCount) setSelectedId(versions[versions.length - 1].id);
   }
   const [lightbox, setLightbox] = useState(false);
+  /** a reference photo from the chat, shown larger */
+  const [zoom, setZoom] = useState<string | null>(null);
+  /** reference photos waiting in the chat box */
+  const refPhotos = useRefPhotos((message) => showToast(message));
+  const [dropping, setDropping] = useState(false);
   /** which panel shows in the middle column (phones: under the design) */
   const [tab, setTab] = useState<Tab>("chat");
   const [filter, setFilter] = useState<QuickAddCategory | "all">("all");
@@ -307,10 +313,10 @@ export default function ResultView({ session, update, initialVersionId, onNewDes
   const picked = pickedQuick(input);
   const togglePick = (id: string) => setInput((text) => toggleQuickLine(text, id));
 
-  async function edit(text: string, baseId: string) {
+  async function edit(text: string, baseId: string, refs: Blob[] = []) {
     const base = versions.find((v) => v.id === baseId) ?? selected;
     const pendingId = uid();
-    const resend = { text, baseId: base.id };
+    const resend = { text, baseId: base.id, ...(refs.length && { refs }) };
     inFlight.add(pendingId); // until the job id is saved: a reopen must not call it interrupted
     // keeps `retry` so the edit can be resent if it fails or is interrupted
     const pending: Message = {
@@ -324,7 +330,7 @@ export default function ResultView({ session, update, initialVersionId, onNewDes
     update((s) => ({ ...s, messages: [...s.messages, pending] }));
     let jobId: string;
     try {
-      jobId = await startDesign({ mode: "edit", image: base.blob, prompt: text, history: requestsLeadingTo(versions, base) });
+      jobId = await startDesign({ mode: "edit", image: base.blob, prompt: text, history: requestsLeadingTo(versions, base), refs });
     } catch (err) {
       update((s) => ({
         ...s,
@@ -344,25 +350,28 @@ export default function ResultView({ session, update, initialVersionId, onNewDes
   function onSend(e: FormEvent) {
     e.preventDefault();
     const text = input.trim();
-    if (!text || working) return;
+    const refs = refPhotos.refs;
+    if ((!text && !refs.length) || working) return;
     setInput("");
-    send(text);
+    refPhotos.clear();
+    send(text, refs);
     inputRef.current?.blur(); // close the keyboard so the design (and its update) is in view
   }
 
   function retry(msg: Message) {
     if (!msg.retry || working) return;
     update((s) => ({ ...s, messages: s.messages.filter((x) => x.id !== msg.id) }));
-    edit(msg.retry.text, msg.retry.baseId);
+    edit(msg.retry.text, msg.retry.baseId, msg.retry.refs);
   }
 
   function toggleFavorite(id: string) {
     update((s) => ({ ...s, versions: s.versions.map((v) => (v.id === id ? { ...v, favorite: !v.favorite } : v)) }));
   }
 
-  function send(text: string) {
-    update((s) => ({ ...s, messages: [...s.messages, { id: uid(), role: "user", time: Date.now(), text }] }));
-    edit(text, selected.id);
+  function send(text: string, refs: Blob[] = []) {
+    const message: Message = { id: uid(), role: "user", time: Date.now(), text, ...(refs.length && { refs }) };
+    update((s) => ({ ...s, messages: [...s.messages, message] }));
+    edit(text, selected.id, refs);
   }
 
   /** Quick Add "Generate": sends what is in the chat box (the picked details, plus anything typed) */
@@ -585,7 +594,20 @@ export default function ResultView({ session, update, initialVersionId, onNewDes
           </div>
 
           {/* chat */}
-          <div className={`min-h-0 flex-1 flex-col ${show("chat")}`}>
+          <div
+            className={`min-h-0 flex-1 flex-col rounded-2xl ${show("chat")} ${dropping ? "outline-2 -outline-offset-4 outline-brown outline-dashed" : ""}`}
+            onDragOver={(e) => {
+              if (![...e.dataTransfer.types].includes("Files")) return;
+              e.preventDefault();
+              setDropping(true);
+            }}
+            onDragLeave={(e) => !e.currentTarget.contains(e.relatedTarget as Node) && setDropping(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDropping(false);
+              refPhotos.add([...e.dataTransfer.files]);
+            }}
+          >
             <div
               ref={chatRef}
               className="flex min-h-0 flex-1 flex-col gap-[18px] overflow-y-auto overscroll-contain px-1 py-2.5"
@@ -611,6 +633,7 @@ export default function ResultView({ session, update, initialVersionId, onNewDes
                           <span />
                         </span>
                       )}
+                      {m.refs && m.refs.length > 0 && <RefGrid refs={m.refs} onOpen={setZoom} />}
                       {m.text}
                       {m.retry && (
                         <button type="button" onClick={() => retry(m)} disabled={working} className="btn-brown btn-label mt-2 block rounded-full px-4 py-1 text-sm text-white disabled:opacity-60">
@@ -629,11 +652,14 @@ export default function ResultView({ session, update, initialVersionId, onNewDes
               onSubmit={onSend}
               className="flex-none"
             >
+              {refPhotos.refs.length > 0 && (
+                <div className="px-1 pt-2">
+                  <RefStrip refs={refPhotos.refs} onRemove={refPhotos.remove} note="add a note and send" />
+                </div>
+              )}
               {/* long requests wrap onto more lines (up to 3 — 3 × 23px + padding = 90px — then it scrolls); the icons stay on the bottom line */}
-              <div className="mt-2 flex items-end gap-2.5 rounded-[28px] border border-line bg-white py-1.5 pr-2 pl-[18px] soft-shadow focus-within:border-brown tab:mt-3">
-                <button type="button" onClick={onNewPhoto} aria-label="Use a different hand photo" title="Use a different hand photo" className="grid h-11 shrink-0 place-items-center">
-                  <GalleryIcon className="h-[22px] w-[22px]" />
-                </button>
+              <div className="mt-2 flex items-end gap-1.5 rounded-[28px] border border-line bg-white py-1.5 pr-2 pl-1.5 soft-shadow focus-within:border-brown tab:mt-3">
+                <AttachButton onFiles={refPhotos.add} disabled={working} />
                 <label htmlFor="refine-input" className="sr-only">
                   Describe a change to your design
                 </label>
@@ -642,6 +668,7 @@ export default function ResultView({ session, update, initialVersionId, onNewDes
                   ref={inputRef}
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
+                  onPaste={refPhotos.onPaste}
                   onKeyDown={(e) => {
                     // keyboard: Enter sends, Shift+Enter adds a line · phones: the return key adds a line, the arrow sends
                     if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && !matchMedia("(pointer: coarse)").matches) {
@@ -658,7 +685,7 @@ export default function ResultView({ session, update, initialVersionId, onNewDes
                     input ? "[field-sizing:content]" : "h-11 placeholder:whitespace-nowrap"
                   }`}
                 />
-                <button type="submit" disabled={!input.trim() || working} aria-label="Send" className="grid h-11 w-11 shrink-0 place-items-center rounded-full disabled:opacity-40">
+                <button type="submit" disabled={(!input.trim() && !refPhotos.refs.length) || working} aria-label="Send" className="grid h-11 w-11 shrink-0 place-items-center rounded-full disabled:opacity-40">
                   {working ? <span className="h-5 w-5 animate-spin rounded-full border-2 border-line border-t-brown" /> : <SendIcon className="h-[22px] w-[22px]" />}
                 </button>
               </div>
@@ -787,19 +814,24 @@ export default function ResultView({ session, update, initialVersionId, onNewDes
         </section>
       </div>
 
-      {lightbox && (
+      {(lightbox || zoom) && (
         <div
           role="dialog"
           aria-modal="true"
-          aria-label="Nail design, larger"
+          aria-label={zoom ? "Reference photo, larger" : "Nail design, larger"}
           className="fixed inset-0 z-[60] grid place-items-center bg-cocoa/45 p-5"
-          onClick={() => setLightbox(false)}
-          onKeyDown={(e) => e.key === "Escape" && setLightbox(false)}
+          onClick={() => (setLightbox(false), setZoom(null))}
+          onKeyDown={(e) => e.key === "Escape" && (setLightbox(false), setZoom(null))}
         >
           <div className="text-center" onClick={(e) => e.stopPropagation()}>
             {/* eslint-disable-next-line @next/next/no-img-element -- local blob */}
-            <img src={selected.url} alt="Your nail design" className="max-h-[70vh] rounded-2xl" />
-            <button type="button" autoFocus onClick={() => setLightbox(false)} className="btn-brown btn-label mt-3 min-h-11 rounded-full px-[22px] text-white">
+            <img src={zoom ?? selected.url} alt={zoom ? "Reference photo" : "Your nail design"} className="max-h-[70vh] rounded-2xl" />
+            <button
+              type="button"
+              autoFocus
+              onClick={() => (setLightbox(false), setZoom(null))}
+              className="btn-brown btn-label mt-3 min-h-11 rounded-full px-[22px] text-white"
+            >
               Close
             </button>
           </div>

@@ -56,7 +56,25 @@ export const saveCategory = (id: string, label: string) =>
   adminFetch<{ category: AdminCategory }>(`categories/${encodeURIComponent(id)}`, json("PUT", { label })).then((d) => d.category);
 
 export type PromoTier = { sets: number; free: number };
-export type AdminPricing = { tiers: PromoTier[]; shippingFee: number; freeShippingMin: number; pricePerDesign: number };
+export type AdminPricing = { tiers: PromoTier[]; shippingFee: number; freeShippingMin: number; pricePerDesign: number; expressShippingFee: number };
+
+export type AdminDiscount = { code: string; percent: number; active: boolean; uses: number; createdAt: string };
+
+export const saveDiscount = (code: string, percent: number, active: boolean) =>
+  adminFetch<{ discount: AdminDiscount }>(`discounts/${encodeURIComponent(code)}`, json("PUT", { percent, active })).then((d) => d.discount);
+
+export type ShippingAddress = {
+  email?: string;
+  firstName?: string;
+  lastName: string;
+  address1: string;
+  address2?: string;
+  city: string;
+  state: string;
+  zip: string;
+  country: string;
+  phone?: string;
+};
 
 export type OrderStatus = "pending" | "paid" | "failed";
 export type AdminOrderItem = {
@@ -82,6 +100,10 @@ export type AdminOrder = {
   total: number;
   currency: string;
   notes: string | null;
+  discountCode: string | null;
+  codeDiscount: number;
+  shippingMethod: "standard" | "express" | null;
+  shippingAddress: ShippingAddress | null;
   createdAt: string;
   updatedAt: string;
   paidAt: string | null;

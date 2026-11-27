@@ -71,6 +71,22 @@ function Detail({ order, onClose }: { order: AdminOrder; onClose: () => void }) 
                 {order.whopPaymentId}
               </p>
             )}
+            {order.shippingAddress && (
+              <div className="mt-2 rounded-xl border border-line bg-white px-3 py-2">
+                <p className="text-[12px] font-semibold tracking-[0.12em] text-cocoa-soft uppercase">Giao tới</p>
+                <p className="font-medium">{[order.shippingAddress.firstName, order.shippingAddress.lastName].filter(Boolean).join(" ")}</p>
+                <p>
+                  {order.shippingAddress.address1}
+                  {order.shippingAddress.address2 ? `, ${order.shippingAddress.address2}` : ""}
+                </p>
+                <p>
+                  {order.shippingAddress.city}, {order.shippingAddress.state} {order.shippingAddress.zip}
+                </p>
+                <p>{order.shippingAddress.country}</p>
+                {order.shippingAddress.phone && <p>☎ {order.shippingAddress.phone}</p>}
+                {order.shippingAddress.email && order.shippingAddress.email !== order.email && <p>✉ {order.shippingAddress.email}</p>}
+              </div>
+            )}
             {order.notes && (
               <p className="mt-2 rounded-xl bg-pink-2 px-3 py-2">
                 <span className="font-medium">Ghi chú của khách:</span> {order.notes}
@@ -111,6 +127,12 @@ function Detail({ order, onClose }: { order: AdminOrder; onClose: () => void }) 
               <span>Tiền hàng</span>
               <span>{usd(order.subtotal, order.currency)}</span>
             </div>
+            {order.codeDiscount > 0 && (
+              <div className={row}>
+                <span>Mã giảm giá {order.discountCode}</span>
+                <span className="text-[#2f6b39]">−{usd(order.codeDiscount, order.currency)}</span>
+              </div>
+            )}
             {order.discount > 0 && (
               <div className={row}>
                 <span>Khuyến mãi</span>
@@ -118,7 +140,7 @@ function Detail({ order, onClose }: { order: AdminOrder; onClose: () => void }) 
               </div>
             )}
             <div className={row}>
-              <span>Phí ship</span>
+              <span>Phí ship{order.shippingMethod === "express" ? " (Express)" : order.shippingMethod === "standard" ? " (thường)" : ""}</span>
               <span>{order.shipping > 0 ? usd(order.shipping, order.currency) : "Miễn phí"}</span>
             </div>
             <div className={`${row} mt-1 border-t border-line pt-2 text-[16px] font-semibold`}>
@@ -126,7 +148,7 @@ function Detail({ order, onClose }: { order: AdminOrder; onClose: () => void }) 
               <span>{usd(order.total, order.currency)}</span>
             </div>
           </section>
-          <p className="mt-3 text-[13px] text-cocoa-soft">Thông tin thanh toán chi tiết (và giao hàng, nếu Whop có thu): tra trong Whop theo mã thanh toán hoặc email của khách.</p>
+          <p className="mt-3 text-[13px] text-cocoa-soft">Chi tiết thanh toán: tra trong Whop theo mã thanh toán hoặc email của khách.</p>
         </div>
       </div>
     </div>

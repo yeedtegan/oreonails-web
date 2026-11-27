@@ -9,11 +9,15 @@ export class GenerationError extends Error {
   }
 }
 
-export type DesignRequest =
+export type DesignRequest = (
   /** first design, from the customer's hand photo */
   | { mode: "create"; image: Blob; prompt: string; styles: string[] }
   /** refine an existing design with a chat instruction · `history`: the earlier requests behind this design, oldest first */
-  | { mode: "edit"; image: Blob; prompt: string; history?: string[] };
+  | { mode: "edit"; image: Blob; prompt: string; history?: string[] }
+) & {
+  /** the customer's reference photos (inspiration for colors / art), up to MAX_REFS */
+  refs?: Blob[];
+};
 
 const LOST = "Connection lost while creating your design. Please try again.";
 const UNAVAILABLE = "Our design studio is unavailable right now. Please try again in a few minutes.";
@@ -34,6 +38,7 @@ export async function startDesign(req: DesignRequest): Promise<string> {
   body.append("prompt", req.prompt.trim());
   if (req.mode === "create") req.styles.forEach((s) => body.append("styles", s));
   if (req.mode === "edit") req.history?.forEach((h) => body.append("history", h));
+  req.refs?.forEach((r, i) => body.append("refs", r, r instanceof File ? r.name : `ref-${i + 1}.${(r.type.split("/")[1] || "jpg").replace("jpeg", "jpg")}`));
 
   let res: Response;
   try {

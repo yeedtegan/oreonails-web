@@ -28,7 +28,9 @@ export type StoredMessage = {
   time: number;
   status?: "pending" | "error";
   /** the edit to resend (failed edits, and edits still running) */
-  retry?: { text: string; baseId: string };
+  retry?: { text: string; baseId: string; refs?: Blob[] };
+  /** reference photos the customer attached to this message */
+  refs?: Blob[];
   /** server job of a pending edit, to pick it up again after leaving the page */
   jobId?: string;
 };
@@ -154,26 +156,46 @@ async function fromStored(v: unknown): Promise<Blob> {
   }
 }
 
-/** Blob fields → bytes, for saving */
+/** Blob fields (or lists of Blobs) → bytes, for saving */
 async function pack<T extends object>(obj: T, keys: (keyof T)[]): Promise<T> {
   const out = { ...obj } as Record<keyof T, unknown>;
-  for (const k of keys) if (obj[k] instanceof Blob) out[k] = await toBytes(obj[k] as Blob);
+  for (const k of keys) {
+    const v = obj[k];
+    if (v instanceof Blob) out[k] = await toBytes(v);
+    else if (Array.isArray(v)) out[k] = await Promise.all(v.map((b) => (b instanceof Blob ? toBytes(b) : b)));
+  }
   return out as T;
 }
-/** stored bytes → Blob fields, after reading */
+/** stored bytes → Blob fields (or lists of Blobs), after reading */
 async function unpack<T extends object>(obj: T, keys: (keyof T)[]): Promise<T> {
   const out = { ...obj } as Record<keyof T, unknown>;
-  for (const k of keys) if (obj[k] != null) out[k] = await fromStored(obj[k]);
+  for (const k of keys) {
+    const v = obj[k];
+    if (Array.isArray(v)) out[k] = await Promise.all(v.map(fromStored));
+    else if (v != null) out[k] = await fromStored(v);
+  }
   return out as T;
 }
+
+/** a chat message with its reference photos (also the ones kept to resend it) */
+const packMessage = async (m: StoredMessage): Promise<StoredMessage> => {
+  const out = await pack(m, ["refs"]);
+  return m.retry?.refs ? { ...out, retry: await pack(m.retry, ["refs"]) } : out;
+};
+const unpackMessage = async (m: StoredMessage): Promise<StoredMessage> => {
+  const out = await unpack(m, ["refs"]);
+  return m.retry?.refs ? { ...out, retry: await unpack(m.retry, ["refs"]) } : out;
+};
 
 const packSession = async (s: StoredSession): Promise<StoredSession> => ({
   ...s,
   versions: await Promise.all(s.versions.map((v) => pack(v, ["blob"]))),
+  messages: await Promise.all(s.messages.map(packMessage)),
 });
 const unpackSession = async (s: StoredSession): Promise<StoredSession> => ({
   ...s,
   versions: await Promise.all(s.versions.map((v) => unpack(v, ["blob"]))),
+  messages: await Promise.all((s.messages ?? []).map(unpackMessage)),
 });
 
 export const getSession = (id: string) =>

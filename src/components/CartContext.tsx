@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, useSyncExternalStore } from "react";
 import {
   clearCart,
   deleteCartItem,
@@ -14,7 +14,7 @@ import {
   setOpenSessionId,
   type StoredCartItem,
 } from "@/lib/designStore";
-import { priceCart, type CartTotals, type PricingRules } from "@/lib/pricing";
+import { priceCart, type CartTotals, type PricingRules, type ShippingMethod } from "@/lib/pricing";
 import { pixelCurrency, track } from "@/lib/metaPixel";
 import { hasSize, productImage, type Product, type ProductCategory } from "@/lib/shop";
 import { useAuth } from "./AuthContext";
@@ -44,9 +44,52 @@ type Cart = {
   /** promo + shipping rules from the store (null while loading / unreachable) */
   pricing: PricingRules | null;
   totals: CartTotals;
+  /** discount code checked with the store (kept in this browser) */
+  discount: Discount | null;
+  /** checks a code with the store; throws Error(message) when it isn't valid */
+  applyDiscount: (code: string) => Promise<Discount>;
+  removeDiscount: () => void;
+  shippingMethod: ShippingMethod;
+  setShippingMethod: (m: ShippingMethod) => void;
 };
 
+export type Discount = { code: string; percent: number };
+
 const CartContext = createContext<Cart | null>(null);
+const DISCOUNT_KEY = "oreo-discount";
+
+/** the applied code, kept in localStorage (every tab sees a change) */
+const discountListeners = new Set<() => void>();
+function readDiscountRaw(): string {
+  try {
+    return localStorage.getItem(DISCOUNT_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+function subscribeDiscount(cb: () => void) {
+  discountListeners.add(cb);
+  window.addEventListener("storage", cb);
+  return () => {
+    discountListeners.delete(cb);
+    window.removeEventListener("storage", cb);
+  };
+}
+function parseDiscount(raw: string): Discount | null {
+  try {
+    const d = JSON.parse(raw || "null") as Discount | null;
+    return d && typeof d.code === "string" && d.percent > 0 ? d : null;
+  } catch {
+    return null;
+  }
+}
+function saveDiscount(d: Discount | null) {
+  try {
+    if (d) localStorage.setItem(DISCOUNT_KEY, JSON.stringify(d));
+    else localStorage.removeItem(DISCOUNT_KEY);
+  } catch {}
+  discountListeners.forEach((l) => l());
+}
 
 /** window event that opens the cart panel (the header listens) */
 export const OPEN_CART_EVENT = "oreo:open-cart";
@@ -385,13 +428,33 @@ export function CartProvider({ children }: { children: ReactNode }) {
     setCartNotes(n);
   }, []);
 
+  // discount code: remembered in this browser, checked again by the store when the order is placed
+  const discountRaw = useSyncExternalStore(subscribeDiscount, readDiscountRaw, () => "");
+  const discount = useMemo(() => parseDiscount(discountRaw), [discountRaw]);
+  const applyDiscount = useCallback(async (raw: string) => {
+    const code = raw.trim().toUpperCase();
+    if (!code) throw new Error("Enter a discount code.");
+    const res = await fetch(`/api/discounts/${encodeURIComponent(code)}`, { cache: "no-store" }).catch(() => null);
+    const data = (await res?.json().catch(() => ({}))) as Partial<Discount> & { error?: string };
+    if (!res) throw new Error("Couldn’t check the code — please try again.");
+    if (res.status === 404) throw new Error("That code isn’t valid.");
+    if (!res.ok || !data.code || !data.percent) throw new Error(data.error ?? "Couldn’t check the code — please try again.");
+    const d = { code: data.code, percent: data.percent };
+    saveDiscount(d);
+    return d;
+  }, []);
+  const removeDiscount = useCallback(() => saveDiscount(null), []);
+  const [shippingMethod, setShippingMethod] = useState<ShippingMethod>("standard");
+
   const cart = useMemo<Cart>(() => {
     // custom designs always cost the store's current price (also ones saved in the cart before a price change)
     const designPrice = pricing?.pricePerDesign;
     const shown =
       designPrice === undefined ? items : items.map((i) => (i.kind !== "product" && i.price !== designPrice ? { ...i, price: designPrice } : i));
     const lines = shown.map((i) => ({ price: i.price, quantity: lineOptions(i).quantity, isSet: isSet(i) }));
-    const totals = priceCart(lines, pricing ?? { tiers: [], shippingFee: 0, freeShippingMin: 0 });
+    // Express only while the store offers it
+    const method: ShippingMethod = shippingMethod === "express" && (pricing?.expressShippingFee ?? 0) > 0 ? "express" : "standard";
+    const totals = priceCart(lines, pricing ?? { tiers: [], shippingFee: 0, freeShippingMin: 0 }, { method, codePercent: discount?.percent });
     return {
       items: shown,
       count: lines.reduce((s, l) => s + l.quantity, 0),
@@ -406,8 +469,13 @@ export function CartProvider({ children }: { children: ReactNode }) {
       setNotes,
       pricing,
       totals,
+      discount,
+      applyDiscount,
+      removeDiscount,
+      shippingMethod: method,
+      setShippingMethod,
     };
-  }, [items, add, addProduct, update, remove, openDesign, openRequest, notes, setNotes, pricing]);
+  }, [items, add, addProduct, update, remove, openDesign, openRequest, notes, setNotes, pricing, discount, applyDiscount, removeDiscount, shippingMethod]);
   return <CartContext.Provider value={cart}>{children}</CartContext.Provider>;
 }
 
