@@ -2,6 +2,8 @@ import type { NailStyleId } from "@/components/NailThumb";
 
 export const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 export const MAX_FILE_BYTES = 10 * 1024 * 1024;
+/** reference photos the customer can attach to one request (inspiration for colors / art) */
+export const MAX_REFS = 4;
 export const MAX_PROMPT = 500;
 
 /** `prompt` is the line added to the design description when the style is picked. */

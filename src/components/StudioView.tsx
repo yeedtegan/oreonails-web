@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState, type DragEvent, type RefObject } from "react";
+import { useEffect, useRef, useState, type ClipboardEvent, type DragEvent, type RefObject } from "react";
+import { AttachButton, RefStrip } from "./RefPhotos";
 import { ErrorOverlay, GeneratingOverlay, type GenError } from "./PhotoStage";
 import { CameraIcon, CheckIcon, ChevronRightIcon, PencilIcon, SparkleIcon } from "./icons";
 import { MAX_PROMPT, QUICK_ADD } from "@/lib/constants";
@@ -18,6 +19,11 @@ type Props = {
   /** Quick Add details picked for the first design */
   quick: string[];
   toggleQuick: (id: string) => void;
+  /** reference photos attached to the description */
+  refs: File[];
+  onAddRefs: (files: File[]) => void;
+  onRemoveRef: (i: number) => void;
+  onPasteRefs: (e: ClipboardEvent) => void;
   error: string | null;
   loading: boolean;
   genError: GenError | null;
@@ -237,27 +243,36 @@ export default function StudioView({ textareaRef, ...p }: Props) {
 
         <QuickAdd quick={p.quick} toggleQuick={p.toggleQuick} />
 
-        {/* describe */}
-        <label className="relative mt-2.5 flex flex-none items-start gap-3 rounded-2xl border border-line bg-[#fffaf8] px-3.5 py-2.5 transition focus-within:border-brown-2 tab:mt-3 tab:rounded-[18px] tab:px-4 tab:py-3.5 [@media(max-height:600px)]:py-2">
-          <PencilIcon className="mt-0.5 h-[22px] w-[22px] shrink-0 text-cocoa-soft" />
-          <span className="sr-only">Describe your nail design</span>
-          <textarea
-            id="m-prompt"
-            ref={textareaRef}
-            value={p.prompt}
-            maxLength={MAX_PROMPT}
-            onChange={(e) => p.setPrompt(e.target.value)}
-            rows={3}
-            placeholder="Describe your design..."
-            // always 3 lines high (3 × 23px); longer text scrolls inside
-            className="h-[70px] w-full min-w-0 flex-1 resize-none overflow-y-auto bg-transparent text-[16px] leading-[1.45] text-cocoa outline-none placeholder:text-cocoa-soft"
-          />
+        {/* describe (+ reference photos: attach, or paste into the text) */}
+        <div className="relative mt-2.5 flex flex-none flex-col rounded-2xl border border-line bg-[#fffaf8] px-3.5 py-2.5 transition focus-within:border-brown-2 tab:mt-3 tab:rounded-[18px] tab:px-4 tab:py-3.5 [@media(max-height:600px)]:py-2">
+          {p.refs.length > 0 && (
+            <div className="pb-2">
+              <RefStrip refs={p.refs} onRemove={p.onRemoveRef} size="sm" />
+            </div>
+          )}
+          <div className="flex items-start gap-3">
+            <PencilIcon className="mt-0.5 h-[22px] w-[22px] shrink-0 text-cocoa-soft" />
+            <textarea
+              id="m-prompt"
+              ref={textareaRef}
+              value={p.prompt}
+              maxLength={MAX_PROMPT}
+              onChange={(e) => p.setPrompt(e.target.value)}
+              onPaste={p.onPasteRefs}
+              rows={3}
+              aria-label="Describe your nail design"
+              placeholder="Describe your design..."
+              // always 3 lines high (3 × 23px); longer text scrolls inside
+              className="h-[70px] w-full min-w-0 flex-1 resize-none overflow-y-auto bg-transparent text-[16px] leading-[1.45] text-cocoa outline-none placeholder:text-cocoa-soft"
+            />
+            <AttachButton onFiles={p.onAddRefs} disabled={busy} className="-my-2 -mr-2" />
+          </div>
           {p.prompt.length > 0 && (
             <span className="pointer-events-none absolute right-3 bottom-1 text-[11px] text-cocoa-soft">
               {p.prompt.length} / {MAX_PROMPT}
             </span>
           )}
-        </label>
+        </div>
 
         {p.error && (
           <p role="alert" className="mt-3 flex-none rounded-xl bg-wine/10 px-4 py-2.5 text-center text-[14px] font-medium text-wine">

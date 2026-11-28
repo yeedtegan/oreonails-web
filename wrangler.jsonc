@@ -22,6 +22,19 @@
   "observability": {
     "enabled": true
   },
+  // Previews (non-production branches) use the STAGING API — its own database, files and Whop sandbox — so trying a
+  // branch never touches real orders or payments (oreonails-api: .env.staging.example, ecosystem.staging.config.js).
+  // Its token is a preview secret: npx wrangler preview base-config secret put IMAGE_API_TOKEN
+  // SITE_URL (where Whop sends customers back after paying) = the preview of the `develop` branch. Previews are served
+  // at <branch>.develop.oreonails.com (custom domain develop.oreonails.com, enabled for Preview only — never put
+  // Preview on oreonails.com itself: its *.oreonails.com wildcard swallows api. / dev.).
+  "previews": {
+    "vars": {
+      "IMAGE_API_URL": "https://dev.oreonails.com",
+      "IMAGE_API_TOKEN": "xokYPRBrs6lbL71haZM-nBIfW1g4IvhYG8o7PFSVVjixfT1MrOWL5pQGZDNv5258",
+      "SITE_URL": "https://develop.preview.oreonails.com"
+    }
+  },
   // plain runtime settings; secrets (IMAGE_API_TOKEN) are set with `npx wrangler secret put`
   "vars": {
     "IMAGE_API_URL": "https://api.oreonails.com",

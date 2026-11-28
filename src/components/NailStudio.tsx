@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type DragEvent, type FormEvent } from "react";
 import type { NailStyleId } from "./NailThumb";
 import StudioView from "./StudioView";
+import { useRefPhotos } from "./RefPhotos";
 import type { GenError } from "./PhotoStage";
 import ResultView, { followEdit, greeting, isEditInFlight, type DesignSession, type SessionUpdate } from "./ResultView";
 import { useCart } from "./CartContext";
@@ -206,6 +207,9 @@ export default function NailStudio() {
     pickFile(e.dataTransfer.files?.[0]);
   }
 
+  /** reference photos attached to the first design */
+  const refPhotos = useRefPhotos((message) => setError(message));
+
   // Quick Add: picking a detail adds its prompt to the description as its own line (picking again removes it)
   const quick = pickedQuick(prompt);
   const toggleQuick = (id: string) => setPrompt((text) => toggleQuickLine(text, id));
@@ -217,8 +221,8 @@ export default function NailStudio() {
       return;
     }
     const request = prompt.trim();
-    if (!request && styles.length === 0) {
-      setError("Describe your design or pick something from Quick Add.");
+    if (!request && styles.length === 0 && !refPhotos.refs.length) {
+      setError("Describe your design, pick something from Quick Add or attach a reference photo.");
       focusPrompt();
       return;
     }
@@ -229,7 +233,7 @@ export default function NailStudio() {
     const token = photoToken.current;
     let jobId: string;
     try {
-      jobId = await startDesign({ mode: "create", image: file, prompt: request, styles });
+      jobId = await startDesign({ mode: "create", image: file, prompt: request, styles, refs: refPhotos.refs });
     } catch (err) {
       if (photoToken.current === token) {
         showGenError(err);
@@ -255,7 +259,8 @@ export default function NailStudio() {
     try {
       const { id, blob } = await waitForDesign(pending.jobId);
       if (photoToken.current !== token) return; // photo changed meanwhile
-      const instruction = [pending.prompt.trim(), ...pending.styles].filter(Boolean).join(", ");
+      const instruction = [pending.prompt.trim(), ...pending.styles].filter(Boolean).join(", ") || "Design from reference photos";
+      refPhotos.clear();
       showSession({
         id: uid(),
         createdAt: Date.now(),
@@ -331,6 +336,10 @@ export default function NailStudio() {
           textareaRef={textareaRef}
           quick={quick}
           toggleQuick={toggleQuick}
+          refs={refPhotos.refs}
+          onAddRefs={refPhotos.add}
+          onRemoveRef={refPhotos.remove}
+          onPasteRefs={refPhotos.onPaste}
           error={error}
           loading={loading}
           genError={genError}

@@ -351,3 +351,44 @@ export const PlusIcon = (p: P) => (
     <path d="M12 5v14M5 12h14" />
   </svg>
 );
+
+export const MailIcon = (p: P) => (
+  <svg {...base} {...p}>
+    <rect x="3" y="5.5" width="18" height="13" rx="2" />
+    <path d="m4 7.5 8 6 8-6" />
+  </svg>
+);
+
+export const PinIcon = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0C18.5 15.4 12 21 12 21Z" />
+    <circle cx="12" cy="10" r="2.3" />
+  </svg>
+);
+
+export const HomeIcon = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M4 10.5 12 4l8 6.5V20H4Z" />
+    <path d="M9.5 20v-5.5h5V20" />
+  </svg>
+);
+
+export const BuildingIcon = (p: P) => (
+  <svg {...base} {...p}>
+    <rect x="5" y="3.5" width="14" height="17" rx="1.5" />
+    <path d="M9 7.5h1.5M13.5 7.5H15M9 11h1.5M13.5 11H15M9 14.5h1.5M13.5 14.5H15M10.5 20.5v-3h3v3" />
+  </svg>
+);
+
+export const PhoneIcon = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M6.5 3.5h3l1.5 4-2 1.3a11 11 0 0 0 6.2 6.2l1.3-2 4 1.5v3a2 2 0 0 1-2.2 2A16.5 16.5 0 0 1 4.5 5.7a2 2 0 0 1 2-2.2Z" />
+  </svg>
+);
+
+export const TagIcon = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M3.5 12.2V4.5a1 1 0 0 1 1-1h7.7l8.3 8.3a1.5 1.5 0 0 1 0 2.1l-6.1 6.1a1.5 1.5 0 0 1-2.1 0Z" />
+    <circle cx="8" cy="8" r="1.4" />
+  </svg>
+);
