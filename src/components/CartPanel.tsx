@@ -43,8 +43,9 @@ async function startCheckout(
   const form = new FormData();
   const designs = items.filter((i) => !isProduct(i) && i.blob);
   for (const item of designs) {
-    form.append("images", item.blob!, `${item.id}.png`);
     form.append("designIds", item.id);
+    // already in the account cart → the server has its picture: don't upload ~2 MB again
+    if (!item.synced) form.append("images", item.blob!, `${item.id}.png`);
   }
   form.append("designs", JSON.stringify(designs.map((i) => ({ designId: i.id, ...lineOptions(i) }))));
   form.append("products", JSON.stringify(items.filter(isProduct).map((i) => ({ productId: i.productId, ...lineOptions(i) }))));
@@ -646,7 +647,10 @@ export default function CartPanel({ onClose }: { onClose: () => void }) {
                 className="btn-brown flex min-h-[46px] w-full items-center justify-between rounded-full px-[26px] text-[16px] font-semibold text-white disabled:opacity-60 tab:min-h-[50px] tab:text-[17px]"
               >
                 {busy ? (
-                  <span className="w-full text-center text-[15px] font-medium">Opening secure checkout…</span>
+                  <span className="flex w-full items-center justify-center gap-2.5 text-[15px] font-medium">
+                    <span className="h-[18px] w-[18px] animate-spin rounded-full border-2 border-white/40 border-t-white" aria-hidden />
+                    Opening secure checkout…
+                  </span>
                 ) : (
                   <>
                     <span>Check Out</span>

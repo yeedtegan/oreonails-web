@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { CloseIcon } from "../icons";
 import { titleCase } from "@/lib/shop";
-import { adminFetch, dateTime, usd, type AdminOrder, type AdminOrderItem, type OrderStats, type OrderStatus } from "./api";
+import { adminFetch, dateTime, usd, type AdminOrder, type AdminOrderItem, type OrderStats, type OrderStatus, type ShippingAddress } from "./api";
 
 const PAGE = 30;
 
@@ -24,6 +24,76 @@ function itemImage(order: AdminOrder, i: AdminOrderItem): string | null {
   if (i.designId && i.image) return `/api/admin/orders/${encodeURIComponent(order.id)}/images/${encodeURIComponent(i.image)}`;
   if (i.productId) return `/api/admin/products/${encodeURIComponent(i.productId)}/image`;
   return null;
+}
+
+const recipient = (a: ShippingAddress) => [a.firstName, a.lastName].filter(Boolean).join(" ");
+/** the address as the lines of a shipping label */
+const labelLines = (a: ShippingAddress) =>
+  [recipient(a), a.address1, a.address2, `${a.city}, ${a.state} ${a.zip}`.replace(/^, |,\s*$/g, "").trim(), a.country, a.phone].filter(
+    (l): l is string => !!l && !!l.trim(),
+  );
+const METHOD = { standard: "Standard (thường)", express: "Express" } as const;
+
+/** "Delivery" step of the customer's checkout: who / where to ship, and how */
+function Delivery({ order }: { order: AdminOrder }) {
+  const a = order.shippingAddress;
+  const [copied, setCopied] = useState(false);
+  const fields: [string, string | undefined][] = a
+    ? [
+        ["Người nhận", recipient(a)],
+        ["Email", a.email || order.email],
+        ["Điện thoại", a.phone],
+        ["Địa chỉ", a.address1],
+        ["Địa chỉ 2", a.address2],
+        ["Thành phố", a.city],
+        ["Bang / Tỉnh", a.state],
+        ["ZIP / Mã bưu chính", a.zip],
+        ["Quốc gia", a.country],
+      ]
+    : [];
+
+  async function copy() {
+    if (!a) return;
+    try {
+      await navigator.clipboard.writeText(labelLines(a).join("\n"));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* clipboard blocked: nothing to do */
+    }
+  }
+
+  return (
+    <section aria-labelledby="delivery-title" className="mt-4 rounded-2xl border border-line bg-ivory p-4 text-[14px]">
+      <div className="flex items-center justify-between gap-3">
+        <h3 id="delivery-title" className="font-semibold">
+          Delivery
+        </h3>
+        {a && (
+          <button type="button" onClick={copy} className="min-h-9 rounded-full border border-line bg-white px-3.5 text-[13px] hover:bg-pink-2">
+            {copied ? "Đã copy ✓" : "Copy địa chỉ"}
+          </button>
+        )}
+      </div>
+      <p className="mt-1 text-cocoa-soft">
+        Phương thức giao: <span className="text-cocoa">{order.shippingMethod ? METHOD[order.shippingMethod] : "—"}</span>
+      </p>
+      {a ? (
+        <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5">
+          {fields
+            .filter(([, v]) => v && v.trim())
+            .map(([k, v]) => (
+              <div key={k} className="contents">
+                <dt className="text-cocoa-soft">{k}</dt>
+                <dd className="min-w-0 font-medium break-words select-all">{v}</dd>
+              </div>
+            ))}
+        </dl>
+      ) : (
+        <p className="mt-2 rounded-xl bg-[#fff6e5] px-3 py-2 text-[#8a5a00]">Đơn này không có địa chỉ giao hàng (tạo trước khi web có bước Delivery).</p>
+      )}
+    </section>
+  );
 }
 
 function Detail({ order, onClose }: { order: AdminOrder; onClose: () => void }) {
@@ -71,28 +141,14 @@ function Detail({ order, onClose }: { order: AdminOrder; onClose: () => void }) 
                 {order.whopPaymentId}
               </p>
             )}
-            {order.shippingAddress && (
-              <div className="mt-2 rounded-xl border border-line bg-white px-3 py-2">
-                <p className="text-[12px] font-semibold tracking-[0.12em] text-cocoa-soft uppercase">Giao tới</p>
-                <p className="font-medium">{[order.shippingAddress.firstName, order.shippingAddress.lastName].filter(Boolean).join(" ")}</p>
-                <p>
-                  {order.shippingAddress.address1}
-                  {order.shippingAddress.address2 ? `, ${order.shippingAddress.address2}` : ""}
-                </p>
-                <p>
-                  {order.shippingAddress.city}, {order.shippingAddress.state} {order.shippingAddress.zip}
-                </p>
-                <p>{order.shippingAddress.country}</p>
-                {order.shippingAddress.phone && <p>☎ {order.shippingAddress.phone}</p>}
-                {order.shippingAddress.email && order.shippingAddress.email !== order.email && <p>✉ {order.shippingAddress.email}</p>}
-              </div>
-            )}
             {order.notes && (
               <p className="mt-2 rounded-xl bg-pink-2 px-3 py-2">
                 <span className="font-medium">Ghi chú của khách:</span> {order.notes}
               </p>
             )}
           </section>
+
+          <Delivery order={order} />
 
           <h3 className="mt-5 mb-2 font-semibold">Sản phẩm ({itemCount(order)})</h3>
           <ul className="space-y-2">
@@ -268,6 +324,16 @@ export default function AdminOrders() {
                   </p>
                   <p className="truncate text-[13px] text-cocoa-soft">
                     {dateTime(o.createdAt)} · {itemCount(o)} sản phẩm · {o.id}
+                  </p>
+                  <p className="truncate text-[13px]">
+                    {o.shippingAddress ? (
+                      <>
+                        Giao tới {recipient(o.shippingAddress)} · {[o.shippingAddress.city, o.shippingAddress.state, o.shippingAddress.country].filter(Boolean).join(", ")}
+                        {o.shippingMethod === "express" && <span className="ml-1.5 rounded-full bg-brown px-2 py-px text-[11px] text-white">Express</span>}
+                      </>
+                    ) : (
+                      <span className="text-cocoa-soft">Chưa có địa chỉ giao hàng</span>
+                    )}
                   </p>
                 </div>
                 <b className="shrink-0 font-semibold">{usd(o.total, o.currency)}</b>

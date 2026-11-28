@@ -244,7 +244,18 @@ function FilterPanel({ f, toggle, clear, categories }: { f: ShopFilters; toggle:
 }
 
 /** one set in a grid — the photo and name open its page */
-export function ProductCard({ product, favorite, onFavorite }: { product: Product; favorite: boolean; onFavorite: () => void }) {
+export function ProductCard({
+  product,
+  favorite,
+  onFavorite,
+  eager = false,
+}: {
+  product: Product;
+  favorite: boolean;
+  onFavorite: () => void;
+  /** first row: load the photo right away (the rest load as they scroll into view) */
+  eager?: boolean;
+}) {
   const { addProduct } = useCart();
   const details = [product.shapes.map(titleCase).join(" / "), product.lengths.map(titleCase).join(" / ")].filter(Boolean).join(" · ");
 
@@ -255,7 +266,11 @@ export function ProductCard({ product, favorite, onFavorite }: { product: Produc
         <img
           src={productImage(product)}
           alt={`${product.name} press-on nail set`}
-          loading="lazy"
+          loading={eager ? "eager" : "lazy"}
+          fetchPriority={eager ? "high" : "auto"}
+          decoding="async"
+          width={500}
+          height={200}
           className="aspect-[2.5/1] w-full rounded-[10px] object-cover mix-blend-multiply"
         />
       </Link>
@@ -298,6 +313,9 @@ export function ProductCard({ product, favorite, onFavorite }: { product: Produc
   );
 }
 
+/** sets rendered at first / added each time the customer nears the end of the grid */
+const PAGE_SIZE = 24;
+
 /** Shop: banner, filters (sidebar; a toggle on phones), sort, product grid. Filters live in the URL. */
 export default function ShopView({ products, categories, initial }: { products: Product[] | null; categories: Category[]; initial: ShopFilters }) {
   const [f, setF] = useState(initial);
@@ -319,6 +337,25 @@ export default function ShopView({ products, categories, initial }: { products: 
   }, [initial.q]);
 
   const list = useMemo(() => (products ? filterProducts(products, f) : []), [products, f]);
+  // many sets: the grid grows by a page as the customer nears its end (starts again for other filters / sort)
+  const listKey = JSON.stringify(f);
+  const [paging, setPaging] = useState({ key: listKey, shown: PAGE_SIZE });
+  const shown = paging.key === listKey ? paging.shown : PAGE_SIZE;
+  const hasMore = list.length > shown;
+  const showMore = () => setPaging({ key: listKey, shown: shown + PAGE_SIZE });
+  const moreRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = moreRef.current;
+    if (!el || !hasMore) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) setPaging({ key: listKey, shown: shown + PAGE_SIZE });
+      },
+      { rootMargin: "900px 0px" },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [hasMore, listKey, shown]);
 
   const toggle: Toggle = (key, value) =>
     setF((cur) => {
@@ -417,10 +454,12 @@ export default function ShopView({ products, categories, initial }: { products: 
               )}
             </div>
           ) : (
-            <ul className="grid grid-cols-2 gap-2.5 tab:grid-cols-3 tab:gap-3.5 nav:grid-cols-4">
-              {list.map((p) => (
+            <>
+              <ul className="grid grid-cols-2 gap-2.5 tab:grid-cols-3 tab:gap-3.5 nav:grid-cols-4">
+              {list.slice(0, shown).map((p, k) => (
                 <ProductCard
                   key={p.id}
+                  eager={k < 4}
                   product={p}
                   favorite={favs.includes(p.id)}
                   onFavorite={() => {
@@ -430,7 +469,19 @@ export default function ShopView({ products, categories, initial }: { products: 
                   }}
                 />
               ))}
-            </ul>
+              </ul>
+              {/* nearing this loads the next page; the button is there too (no IntersectionObserver, keyboard) */}
+              {hasMore && (
+                <div ref={moreRef} className="mt-6 flex flex-col items-center gap-2 text-[13px] text-cocoa-soft">
+                  <span>
+                    Showing {shown} of {list.length} sets
+                  </span>
+                  <button type="button" onClick={showMore} className="min-h-11 rounded-full border border-brown px-6 text-[15px] text-brown">
+                    Show more
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </section>
       </div>

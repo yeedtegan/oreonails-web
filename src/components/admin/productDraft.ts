@@ -1,6 +1,7 @@
 "use client";
 
 import { adminFetch, type AdminProduct } from "./api";
+import { shrinkImage } from "@/lib/shrinkImage";
 
 /** Form state of one product (strings while typing) + saving it (PUT /admin/products/<id>). */
 export type Draft = {
@@ -75,7 +76,7 @@ const toPayload = (d: Draft) => ({
 export async function saveProduct(id: string, d: Draft, image: File | null): Promise<AdminProduct> {
   const form = new FormData();
   form.append("product", JSON.stringify(toPayload(d)));
-  if (image) form.append("image", image);
+  if (image) form.append("image", await shrinkImage(image)); // web-sized: the shop grid loads many of these
   const { product } = await adminFetch<{ product: AdminProduct }>(`products/${encodeURIComponent(id)}`, { method: "PUT", body: form });
   return product;
 }
